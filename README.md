@@ -1,6 +1,6 @@
 # magento2-cart-graphql-go
 
-High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior. Phase 1 complete + Phase 2 nearly complete (4/5). 25 tests (21 integration + 4 comparison) verified field-by-field against Magento 2.4.8 PHP.
+High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior. Phase 1 + Phase 2 complete. 27 tests (22 integration + 5 comparison) verified field-by-field against Magento 2.4.8 PHP.
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ Default port: **8084**.
 | Tax-inclusive pricing | 🔲 Phase 3b | Catalog prices include tax |
 | Tax on shipping | 🔲 Phase 3c | Shipping tax class |
 | Configurable products | ✅ | selected_options → parent+child items, ConfigurableCartItem |
-| Bundle products | 🔲 Phase 2c | Bundle option selections |
+| Bundle products | ✅ | Dynamic pricing, parent+child items, BundleCartItem |
 
 ## Configuration
 
