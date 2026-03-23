@@ -137,3 +137,43 @@ func (r *CartItemRepository) GetItemQuoteID(ctx context.Context, itemID int) (in
 	err := r.db.QueryRowContext(ctx, "SELECT quote_id FROM quote_item WHERE item_id = ?", itemID).Scan(&quoteID)
 	return quoteID, err
 }
+
+// AddConfigurable inserts a parent configurable item (carries the price).
+func (r *CartItemRepository) AddConfigurable(ctx context.Context, quoteID, productID int, sku, name, productType string, qty, price float64) (int, error) {
+	rowTotal := price * qty
+	result, err := r.db.ExecContext(ctx, `
+		INSERT INTO quote_item (quote_id, product_id, product_type, sku, name,
+			qty, price, base_price, row_total, base_row_total,
+			store_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+			(SELECT store_id FROM quote WHERE entity_id = ?),
+			NOW(), NOW())`,
+		quoteID, productID, productType, sku, name,
+		qty, price, price, rowTotal, rowTotal,
+		quoteID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("add configurable item: %w", err)
+	}
+	id, _ := result.LastInsertId()
+	return int(id), nil
+}
+
+// AddChild inserts a child simple item linked to a parent configurable item.
+func (r *CartItemRepository) AddChild(ctx context.Context, quoteID, productID int, sku, name, productType string, qty float64, parentItemID int) (int, error) {
+	result, err := r.db.ExecContext(ctx, `
+		INSERT INTO quote_item (quote_id, product_id, product_type, sku, name,
+			qty, price, base_price, row_total, base_row_total,
+			parent_item_id, store_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?,
+			(SELECT store_id FROM quote WHERE entity_id = ?),
+			NOW(), NOW())`,
+		quoteID, productID, productType, sku, name,
+		qty, parentItemID, quoteID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("add child item: %w", err)
+	}
+	id, _ := result.LastInsertId()
+	return int(id), nil
+}

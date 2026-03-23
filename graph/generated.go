@@ -144,6 +144,16 @@ type ComplexityRoot struct {
 		Message func(childComplexity int) int
 	}
 
+	ConfigurableCartItem struct {
+		ConfigurableOptions func(childComplexity int) int
+		ConfiguredVariant   func(childComplexity int) int
+		Errors              func(childComplexity int) int
+		Prices              func(childComplexity int) int
+		Product             func(childComplexity int) int
+		Quantity            func(childComplexity int) int
+		UID                 func(childComplexity int) int
+	}
+
 	CreateGuestCartOutput struct {
 		Cart func(childComplexity int) int
 	}
@@ -193,6 +203,13 @@ type ComplexityRoot struct {
 
 	RemoveItemFromCartOutput struct {
 		Cart func(childComplexity int) int
+	}
+
+	SelectedConfigurableOption struct {
+		ID          func(childComplexity int) int
+		OptionLabel func(childComplexity int) int
+		ValueID     func(childComplexity int) int
+		ValueLabel  func(childComplexity int) int
 	}
 
 	SelectedPaymentMethod struct {
@@ -665,6 +682,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CartUserInputError.Message(childComplexity), true
 
+	case "ConfigurableCartItem.configurable_options":
+		if e.ComplexityRoot.ConfigurableCartItem.ConfigurableOptions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.ConfigurableOptions(childComplexity), true
+	case "ConfigurableCartItem.configured_variant":
+		if e.ComplexityRoot.ConfigurableCartItem.ConfiguredVariant == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.ConfiguredVariant(childComplexity), true
+	case "ConfigurableCartItem.errors":
+		if e.ComplexityRoot.ConfigurableCartItem.Errors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.Errors(childComplexity), true
+	case "ConfigurableCartItem.prices":
+		if e.ComplexityRoot.ConfigurableCartItem.Prices == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.Prices(childComplexity), true
+	case "ConfigurableCartItem.product":
+		if e.ComplexityRoot.ConfigurableCartItem.Product == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.Product(childComplexity), true
+	case "ConfigurableCartItem.quantity":
+		if e.ComplexityRoot.ConfigurableCartItem.Quantity == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.Quantity(childComplexity), true
+	case "ConfigurableCartItem.uid":
+		if e.ComplexityRoot.ConfigurableCartItem.UID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ConfigurableCartItem.UID(childComplexity), true
+
 	case "CreateGuestCartOutput.cart":
 		if e.ComplexityRoot.CreateGuestCartOutput.Cart == nil {
 			break
@@ -887,6 +947,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RemoveItemFromCartOutput.Cart(childComplexity), true
+
+	case "SelectedConfigurableOption.id":
+		if e.ComplexityRoot.SelectedConfigurableOption.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedConfigurableOption.ID(childComplexity), true
+	case "SelectedConfigurableOption.option_label":
+		if e.ComplexityRoot.SelectedConfigurableOption.OptionLabel == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedConfigurableOption.OptionLabel(childComplexity), true
+	case "SelectedConfigurableOption.value_id":
+		if e.ComplexityRoot.SelectedConfigurableOption.ValueID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedConfigurableOption.ValueID(childComplexity), true
+	case "SelectedConfigurableOption.value_label":
+		if e.ComplexityRoot.SelectedConfigurableOption.ValueLabel == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SelectedConfigurableOption.ValueLabel(childComplexity), true
 
 	case "SelectedPaymentMethod.code":
 		if e.ComplexityRoot.SelectedPaymentMethod.Code == nil {
@@ -3382,6 +3467,257 @@ func (ec *executionContext) fieldContext_CartUserInputError_message(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _ConfigurableCartItem_uid(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_uid,
+		func(ctx context.Context) (any, error) {
+			return obj.UID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_uid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_quantity(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_quantity,
+		func(ctx context.Context) (any, error) {
+			return obj.Quantity, nil
+		},
+		nil,
+		ec.marshalNFloat2float64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_quantity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_prices(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_prices,
+		func(ctx context.Context) (any, error) {
+			return obj.Prices, nil
+		},
+		nil,
+		ec.marshalOCartItemPrices2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemPrices,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_prices(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "price":
+				return ec.fieldContext_CartItemPrices_price(ctx, field)
+			case "row_total":
+				return ec.fieldContext_CartItemPrices_row_total(ctx, field)
+			case "row_total_including_tax":
+				return ec.fieldContext_CartItemPrices_row_total_including_tax(ctx, field)
+			case "total_item_discount":
+				return ec.fieldContext_CartItemPrices_total_item_discount(ctx, field)
+			case "discounts":
+				return ec.fieldContext_CartItemPrices_discounts(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItemPrices", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_product(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_product,
+		func(ctx context.Context) (any, error) {
+			return obj.Product, nil
+		},
+		nil,
+		ec.marshalNCartItemProduct2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemProduct,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_product(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sku":
+				return ec.fieldContext_CartItemProduct_sku(ctx, field)
+			case "name":
+				return ec.fieldContext_CartItemProduct_name(ctx, field)
+			case "url_key":
+				return ec.fieldContext_CartItemProduct_url_key(ctx, field)
+			case "thumbnail":
+				return ec.fieldContext_CartItemProduct_thumbnail(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItemProduct", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_errors(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_errors,
+		func(ctx context.Context) (any, error) {
+			return obj.Errors, nil
+		},
+		nil,
+		ec.marshalOCartItemError2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemError,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_errors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "code":
+				return ec.fieldContext_CartItemError_code(ctx, field)
+			case "message":
+				return ec.fieldContext_CartItemError_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItemError", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_configurable_options(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_configurable_options,
+		func(ctx context.Context) (any, error) {
+			return obj.ConfigurableOptions, nil
+		},
+		nil,
+		ec.marshalNSelectedConfigurableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedConfigurableOptionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_configurable_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_SelectedConfigurableOption_id(ctx, field)
+			case "option_label":
+				return ec.fieldContext_SelectedConfigurableOption_option_label(ctx, field)
+			case "value_id":
+				return ec.fieldContext_SelectedConfigurableOption_value_id(ctx, field)
+			case "value_label":
+				return ec.fieldContext_SelectedConfigurableOption_value_label(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SelectedConfigurableOption", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigurableCartItem_configured_variant(ctx context.Context, field graphql.CollectedField, obj *model.ConfigurableCartItem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ConfigurableCartItem_configured_variant,
+		func(ctx context.Context) (any, error) {
+			return obj.ConfiguredVariant, nil
+		},
+		nil,
+		ec.marshalOCartItemProduct2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemProduct,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ConfigurableCartItem_configured_variant(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigurableCartItem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "sku":
+				return ec.fieldContext_CartItemProduct_sku(ctx, field)
+			case "name":
+				return ec.fieldContext_CartItemProduct_name(ctx, field)
+			case "url_key":
+				return ec.fieldContext_CartItemProduct_url_key(ctx, field)
+			case "thumbnail":
+				return ec.fieldContext_CartItemProduct_thumbnail(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CartItemProduct", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CreateGuestCartOutput_cart(ctx context.Context, field graphql.CollectedField, obj *model.CreateGuestCartOutput) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4529,6 +4865,122 @@ func (ec *executionContext) fieldContext_RemoveItemFromCartOutput_cart(_ context
 				return ec.fieldContext_Cart_prices(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedConfigurableOption_id(ctx context.Context, field graphql.CollectedField, obj *model.SelectedConfigurableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedConfigurableOption_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedConfigurableOption_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedConfigurableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedConfigurableOption_option_label(ctx context.Context, field graphql.CollectedField, obj *model.SelectedConfigurableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedConfigurableOption_option_label,
+		func(ctx context.Context) (any, error) {
+			return obj.OptionLabel, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedConfigurableOption_option_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedConfigurableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedConfigurableOption_value_id(ctx context.Context, field graphql.CollectedField, obj *model.SelectedConfigurableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedConfigurableOption_value_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ValueID, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedConfigurableOption_value_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedConfigurableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SelectedConfigurableOption_value_label(ctx context.Context, field graphql.CollectedField, obj *model.SelectedConfigurableOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SelectedConfigurableOption_value_label,
+		func(ctx context.Context) (any, error) {
+			return obj.ValueLabel, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_SelectedConfigurableOption_value_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SelectedConfigurableOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -7843,6 +8295,13 @@ func (ec *executionContext) _CartItemInterface(ctx context.Context, sel ast.Sele
 			return graphql.Null
 		}
 		return ec._SimpleCartItem(ctx, sel, obj)
+	case model.ConfigurableCartItem:
+		return ec._ConfigurableCartItem(ctx, sel, &obj)
+	case *model.ConfigurableCartItem:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._ConfigurableCartItem(ctx, sel, obj)
 	default:
 		if typedObj, ok := obj.(graphql.Marshaler); ok {
 			return typedObj
@@ -8619,6 +9078,66 @@ func (ec *executionContext) _CartUserInputError(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var configurableCartItemImplementors = []string{"ConfigurableCartItem", "CartItemInterface"}
+
+func (ec *executionContext) _ConfigurableCartItem(ctx context.Context, sel ast.SelectionSet, obj *model.ConfigurableCartItem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, configurableCartItemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ConfigurableCartItem")
+		case "uid":
+			out.Values[i] = ec._ConfigurableCartItem_uid(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "quantity":
+			out.Values[i] = ec._ConfigurableCartItem_quantity(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "prices":
+			out.Values[i] = ec._ConfigurableCartItem_prices(ctx, field, obj)
+		case "product":
+			out.Values[i] = ec._ConfigurableCartItem_product(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "errors":
+			out.Values[i] = ec._ConfigurableCartItem_errors(ctx, field, obj)
+		case "configurable_options":
+			out.Values[i] = ec._ConfigurableCartItem_configurable_options(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "configured_variant":
+			out.Values[i] = ec._ConfigurableCartItem_configured_variant(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var createGuestCartOutputImplementors = []string{"CreateGuestCartOutput"}
 
 func (ec *executionContext) _CreateGuestCartOutput(ctx context.Context, sel ast.SelectionSet, obj *model.CreateGuestCartOutput) graphql.Marshaler {
@@ -9049,6 +9568,60 @@ func (ec *executionContext) _RemoveItemFromCartOutput(ctx context.Context, sel a
 			out.Values[i] = graphql.MarshalString("RemoveItemFromCartOutput")
 		case "cart":
 			out.Values[i] = ec._RemoveItemFromCartOutput_cart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var selectedConfigurableOptionImplementors = []string{"SelectedConfigurableOption"}
+
+func (ec *executionContext) _SelectedConfigurableOption(ctx context.Context, sel ast.SelectionSet, obj *model.SelectedConfigurableOption) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, selectedConfigurableOptionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SelectedConfigurableOption")
+		case "id":
+			out.Values[i] = ec._SelectedConfigurableOption_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "option_label":
+			out.Values[i] = ec._SelectedConfigurableOption_option_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value_id":
+			out.Values[i] = ec._SelectedConfigurableOption_value_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value_label":
+			out.Values[i] = ec._SelectedConfigurableOption_value_label(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -10046,6 +10619,22 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 	return res
 }
 
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐMoney(ctx context.Context, sel ast.SelectionSet, v *model.Money) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -10059,6 +10648,32 @@ func (ec *executionContext) marshalNMoney2ᚖgithubᚗcomᚋmagendooroᚋmagento
 func (ec *executionContext) unmarshalNPaymentMethodInput2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐPaymentMethodInput(ctx context.Context, v any) (*model.PaymentMethodInput, error) {
 	res, err := ec.unmarshalInputPaymentMethodInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNSelectedConfigurableOption2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedConfigurableOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.SelectedConfigurableOption) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSelectedConfigurableOption2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedConfigurableOption(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSelectedConfigurableOption2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐSelectedConfigurableOption(ctx context.Context, sel ast.SelectionSet, v *model.SelectedConfigurableOption) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SelectedConfigurableOption(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNShippingAddressInput2ᚕᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐShippingAddressInputᚄ(ctx context.Context, v any) ([]*model.ShippingAddressInput, error) {
@@ -10508,6 +11123,13 @@ func (ec *executionContext) marshalOCartItemPrices2ᚖgithubᚗcomᚋmagendooro�
 		return graphql.Null
 	}
 	return ec._CartItemPrices(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCartItemProduct2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemProduct(ctx context.Context, sel ast.SelectionSet, v *model.CartItemProduct) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CartItemProduct(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOCartItemProductImage2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCartItemProductImage(ctx context.Context, sel ast.SelectionSet, v *model.CartItemProductImage) graphql.Marshaler {

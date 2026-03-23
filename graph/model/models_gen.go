@@ -163,6 +163,32 @@ type CartUserInputError struct {
 	Message string                 `json:"message"`
 }
 
+type ConfigurableCartItem struct {
+	UID                 string                        `json:"uid"`
+	Quantity            float64                       `json:"quantity"`
+	Prices              *CartItemPrices               `json:"prices,omitempty"`
+	Product             *CartItemProduct              `json:"product"`
+	Errors              []*CartItemError              `json:"errors,omitempty"`
+	ConfigurableOptions []*SelectedConfigurableOption `json:"configurable_options"`
+	ConfiguredVariant   *CartItemProduct              `json:"configured_variant,omitempty"`
+}
+
+func (ConfigurableCartItem) IsCartItemInterface()              {}
+func (this ConfigurableCartItem) GetUID() string               { return this.UID }
+func (this ConfigurableCartItem) GetQuantity() float64         { return this.Quantity }
+func (this ConfigurableCartItem) GetPrices() *CartItemPrices   { return this.Prices }
+func (this ConfigurableCartItem) GetProduct() *CartItemProduct { return this.Product }
+func (this ConfigurableCartItem) GetErrors() []*CartItemError {
+	if this.Errors == nil {
+		return nil
+	}
+	interfaceSlice := make([]*CartItemError, 0, len(this.Errors))
+	for _, concrete := range this.Errors {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
 type CreateGuestCartInput struct {
 	CartUID *string `json:"cart_uid,omitempty"`
 }
@@ -223,6 +249,13 @@ type RemoveItemFromCartInput struct {
 
 type RemoveItemFromCartOutput struct {
 	Cart *Cart `json:"cart"`
+}
+
+type SelectedConfigurableOption struct {
+	ID          int    `json:"id"`
+	OptionLabel string `json:"option_label"`
+	ValueID     int    `json:"value_id"`
+	ValueLabel  string `json:"value_label"`
 }
 
 type SelectedPaymentMethod struct {

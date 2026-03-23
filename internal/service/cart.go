@@ -150,45 +150,19 @@ func (s *CartService) GetCustomerCart(ctx context.Context) (*model.Cart, error) 
 	return s.mapCart(ctx, cart, maskedID)
 }
 
-// AddProducts adds simple products to the cart.
+// AddProducts adds products to the cart (simple + configurable).
 func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []*model.CartItemInput) (*model.AddProductsToCartOutput, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
 	if err != nil {
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
+	storeID := middleware.GetStoreID(ctx)
 	var userErrors []*model.CartUserInputError
 
 	for _, input := range items {
 		// Look up product by SKU
-		var productID int
-		var name, productType string
-		var price float64
-		var status, stockStatus int
-
-		err := s.cartRepo.DB().QueryRowContext(ctx, `
-			SELECT cpe.entity_id, cpe.type_id,
-			       COALESCE(cpev.value, cpe.sku) as name,
-			       COALESCE(cpip.final_price, 0) as price,
-			       COALESCE(cpei_status.value, 1) as status,
-			       COALESCE(csi.is_in_stock, 1) as stock_status
-			FROM catalog_product_entity cpe
-			LEFT JOIN catalog_product_entity_varchar cpev
-				ON cpe.entity_id = cpev.entity_id
-				AND cpev.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name' AND entity_type_id = 4)
-				AND cpev.store_id = 0
-			LEFT JOIN catalog_product_index_price cpip
-				ON cpe.entity_id = cpip.entity_id AND cpip.customer_group_id = 0
-				AND cpip.website_id = (SELECT website_id FROM store WHERE store_id = ? LIMIT 1)
-			LEFT JOIN catalog_product_entity_int cpei_status
-				ON cpe.entity_id = cpei_status.entity_id
-				AND cpei_status.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'status' AND entity_type_id = 4)
-				AND cpei_status.store_id = 0
-			LEFT JOIN cataloginventory_stock_item csi ON cpe.entity_id = csi.product_id
-			WHERE cpe.sku = ?`,
-			middleware.GetStoreID(ctx), input.Sku,
-		).Scan(&productID, &productType, &name, &price, &status, &stockStatus)
-
+		product, err := s.lookupProduct(ctx, input.Sku, storeID)
 		if err != nil {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeProductNotFound,
@@ -196,16 +170,14 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 			})
 			continue
 		}
-
-		if status != 1 {
+		if product.Status != 1 {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeNotSalable,
 				Message: carterr.ErrNotSalable(input.Sku).Error(),
 			})
 			continue
 		}
-
-		if stockStatus != 1 {
+		if product.StockStatus != 1 {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeInsufficientStock,
 				Message: carterr.ErrOutOfStock(input.Sku).Error(),
@@ -213,12 +185,23 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 			continue
 		}
 
-		_, err = s.itemRepo.Add(ctx, quoteID, productID, input.Sku, name, productType, input.Quantity, price)
-		if err != nil {
-			userErrors = append(userErrors, &model.CartUserInputError{
-				Code:    model.CartUserInputErrorTypeUndefined,
-				Message: fmt.Sprintf("Could not add \"%s\" to cart: %v", input.Sku, err),
-			})
+		if product.ProductType == "configurable" && len(input.SelectedOptions) > 0 {
+			// Configurable product: decode options, find child, insert parent+child
+			if err := s.addConfigurableProduct(ctx, quoteID, storeID, product, input); err != nil {
+				userErrors = append(userErrors, &model.CartUserInputError{
+					Code:    model.CartUserInputErrorTypeUndefined,
+					Message: err.Error(),
+				})
+			}
+		} else {
+			// Simple product
+			_, err = s.itemRepo.Add(ctx, quoteID, product.ProductID, input.Sku, product.Name, product.ProductType, input.Quantity, product.Price)
+			if err != nil {
+				userErrors = append(userErrors, &model.CartUserInputError{
+					Code:    model.CartUserInputErrorTypeUndefined,
+					Message: fmt.Sprintf("Could not add \"%s\" to cart: %v", input.Sku, err),
+				})
+			}
 		}
 	}
 
@@ -673,7 +656,7 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		if item.ParentItemID != nil {
 			continue // skip child items
 		}
-		cartItems = append(cartItems, s.mapCartItem(item, currency))
+		cartItems = append(cartItems, s.mapCartItem(ctx, item, items, currency))
 	}
 
 	// Load addresses
@@ -836,7 +819,7 @@ func (s *CartService) mapBillingAddress(ctx context.Context, a *repository.CartA
 	return addr
 }
 
-func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {
+func (s *CartService) mapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {
 	uid := encodeUID(item.ItemID)
 	prices := &model.CartItemPrices{
 		Price:                &model.Money{Value: &item.Price, Currency: &currency},
@@ -850,6 +833,11 @@ func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.
 			Label:  "Discount",
 		}}
 	}
+
+	if item.ProductType == "configurable" {
+		return s.mapConfigurableCartItem(ctx, item, allItems, uid, prices, currency)
+	}
+
 	return &model.SimpleCartItem{
 		UID:      uid,
 		Quantity: item.Qty,
@@ -859,6 +847,94 @@ func (s *CartService) mapCartItem(item *repository.CartItemData, currency model.
 		},
 		Prices: prices,
 	}
+}
+
+func (s *CartService) mapConfigurableCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, uid string, prices *model.CartItemPrices, currency model.CurrencyEnum) *model.ConfigurableCartItem {
+	db := s.cartRepo.DB()
+
+	// Find the parent product's original SKU (quote_item.sku = child sku for configurables)
+	var parentSKU string
+	db.QueryRowContext(ctx,
+		"SELECT sku FROM catalog_product_entity WHERE entity_id = ?",
+		item.ProductID,
+	).Scan(&parentSKU)
+
+	// Find child item in allItems
+	var childItem *repository.CartItemData
+	for _, ci := range allItems {
+		if ci.ParentItemID != nil && *ci.ParentItemID == item.ItemID {
+			childItem = ci
+			break
+		}
+	}
+
+	// Resolve configurable options from super attributes
+	var configOptions []*model.SelectedConfigurableOption
+	rows, err := db.QueryContext(ctx, `
+		SELECT cpsa.attribute_id, ea.attribute_code
+		FROM catalog_product_super_attribute cpsa
+		JOIN eav_attribute ea ON cpsa.attribute_id = ea.attribute_id
+		WHERE cpsa.product_id = ?
+		ORDER BY cpsa.position`, item.ProductID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var attrID int
+			var attrCode string
+			rows.Scan(&attrID, &attrCode)
+
+			if childItem != nil {
+				// Get the option value from the child product
+				var optionID int
+				db.QueryRowContext(ctx,
+					"SELECT value FROM catalog_product_entity_int WHERE entity_id = ? AND attribute_id = ? AND store_id = 0",
+					childItem.ProductID, attrID,
+				).Scan(&optionID)
+
+				// Get option label
+				var optionLabel string
+				db.QueryRowContext(ctx,
+					"SELECT value FROM eav_attribute_option_value WHERE option_id = ? AND store_id = 0",
+					optionID,
+				).Scan(&optionLabel)
+
+				// Get attribute frontend label
+				var attrLabel string
+				db.QueryRowContext(ctx,
+					"SELECT COALESCE(frontend_label, attribute_code) FROM eav_attribute WHERE attribute_id = ?",
+					attrID,
+				).Scan(&attrLabel)
+
+				configOptions = append(configOptions, &model.SelectedConfigurableOption{
+					ID:         attrID,
+					OptionLabel: attrLabel,
+					ValueID:    optionID,
+					ValueLabel: optionLabel,
+				})
+			}
+		}
+	}
+
+	result := &model.ConfigurableCartItem{
+		UID:      uid,
+		Quantity: item.Qty,
+		Product: &model.CartItemProduct{
+			Sku:  parentSKU,
+			Name: &item.Name,
+		},
+		Prices:              prices,
+		ConfigurableOptions: configOptions,
+	}
+
+	// Add configured_variant (child product info)
+	if childItem != nil {
+		result.ConfiguredVariant = &model.CartItemProduct{
+			Sku:  childItem.SKU,
+			Name: &childItem.Name,
+		}
+	}
+
+	return result
 }
 
 func encodeUID(id int) string {
@@ -891,4 +967,148 @@ func (s *CartService) buildRateRequest(storeID int, addr *repository.CartAddress
 		Subtotal:  cart.Subtotal,
 		ItemQty:   cart.ItemsQty,
 	}
+}
+
+// productInfo holds the result of a product lookup.
+type productInfo struct {
+	ProductID   int
+	ProductType string
+	Name        string
+	Price       float64
+	Status      int
+	StockStatus int
+}
+
+func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID int) (*productInfo, error) {
+	var p productInfo
+	err := s.cartRepo.DB().QueryRowContext(ctx, `
+		SELECT cpe.entity_id, cpe.type_id,
+		       COALESCE(cpev.value, cpe.sku) as name,
+		       COALESCE(cpip.final_price, 0) as price,
+		       COALESCE(cpei_status.value, 1) as status,
+		       COALESCE(csi.is_in_stock, 1) as stock_status
+		FROM catalog_product_entity cpe
+		LEFT JOIN catalog_product_entity_varchar cpev
+			ON cpe.entity_id = cpev.entity_id
+			AND cpev.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name' AND entity_type_id = 4)
+			AND cpev.store_id = 0
+		LEFT JOIN catalog_product_index_price cpip
+			ON cpe.entity_id = cpip.entity_id AND cpip.customer_group_id = 0
+			AND cpip.website_id = (SELECT website_id FROM store WHERE store_id = ? LIMIT 1)
+		LEFT JOIN catalog_product_entity_int cpei_status
+			ON cpe.entity_id = cpei_status.entity_id
+			AND cpei_status.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'status' AND entity_type_id = 4)
+			AND cpei_status.store_id = 0
+		LEFT JOIN cataloginventory_stock_item csi ON cpe.entity_id = csi.product_id
+		WHERE cpe.sku = ?`,
+		storeID, sku,
+	).Scan(&p.ProductID, &p.ProductType, &p.Name, &p.Price, &p.Status, &p.StockStatus)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// addConfigurableProduct handles adding a configurable product to the cart.
+// It decodes selected_options, finds the matching child product, and inserts
+// both parent (configurable, carries price) and child (simple, price=0) rows.
+func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, storeID int, parent *productInfo, input *model.CartItemInput) error {
+	db := s.cartRepo.DB()
+
+	// Decode selected_options: base64("configurable/<attr_id>/<option_id>")
+	superAttributes := make(map[int]int) // attribute_id → option_id
+	for _, opt := range input.SelectedOptions {
+		decoded, err := base64.StdEncoding.DecodeString(opt)
+		if err != nil {
+			return fmt.Errorf("You need to choose options for your item.")
+		}
+		parts := strings.Split(string(decoded), "/")
+		if len(parts) != 3 || parts[0] != "configurable" {
+			return fmt.Errorf("You need to choose options for your item.")
+		}
+		attrID, _ := strconv.Atoi(parts[1])
+		optionID, _ := strconv.Atoi(parts[2])
+		if attrID == 0 || optionID == 0 {
+			return fmt.Errorf("You need to choose options for your item.")
+		}
+		superAttributes[attrID] = optionID
+	}
+
+	if len(superAttributes) == 0 {
+		return fmt.Errorf("You need to choose options for your item.")
+	}
+
+	// Find all child products for this configurable
+	rows, err := db.QueryContext(ctx, `
+		SELECT cpsl.product_id, cpe.sku
+		FROM catalog_product_super_link cpsl
+		JOIN catalog_product_entity cpe ON cpsl.product_id = cpe.entity_id
+		WHERE cpsl.parent_id = ?`, parent.ProductID)
+	if err != nil {
+		return fmt.Errorf("Could not find child products for \"%s\"", input.Sku)
+	}
+	defer rows.Close()
+
+	type childCandidate struct {
+		productID int
+		sku       string
+	}
+	var candidates []childCandidate
+	for rows.Next() {
+		var c childCandidate
+		rows.Scan(&c.productID, &c.sku)
+		candidates = append(candidates, c)
+	}
+
+	// Find the child matching ALL selected attribute/option pairs
+	var matchedChild *childCandidate
+	for i := range candidates {
+		allMatch := true
+		for attrID, optionID := range superAttributes {
+			var val int
+			err := db.QueryRowContext(ctx,
+				"SELECT value FROM catalog_product_entity_int WHERE entity_id = ? AND attribute_id = ? AND store_id = 0",
+				candidates[i].productID, attrID,
+			).Scan(&val)
+			if err != nil || val != optionID {
+				allMatch = false
+				break
+			}
+		}
+		if allMatch {
+			matchedChild = &candidates[i]
+			break
+		}
+	}
+
+	if matchedChild == nil {
+		return fmt.Errorf("The requested product is not available with the selected options.")
+	}
+
+	// Look up child product details (name, price, stock)
+	child, err := s.lookupProduct(ctx, matchedChild.sku, storeID)
+	if err != nil {
+		return fmt.Errorf("Could not find product \"%s\"", matchedChild.sku)
+	}
+	if child.StockStatus != 1 {
+		return fmt.Errorf("Product \"%s\" is out of stock.", input.Sku)
+	}
+
+	// The price comes from the child product in the price index
+	price := child.Price
+
+	// Insert parent row (configurable type, carries price)
+	// SKU = child's SKU (matching Magento behavior)
+	parentItemID, err := s.itemRepo.AddConfigurable(ctx, quoteID, parent.ProductID, matchedChild.sku, parent.Name, "configurable", input.Quantity, price)
+	if err != nil {
+		return fmt.Errorf("Could not add \"%s\" to cart: %v", input.Sku, err)
+	}
+
+	// Insert child row (simple type, price=0, parent_item_id)
+	_, err = s.itemRepo.AddChild(ctx, quoteID, child.ProductID, matchedChild.sku, child.Name, "simple", input.Quantity, parentItemID)
+	if err != nil {
+		return fmt.Errorf("Could not add \"%s\" to cart: %v", input.Sku, err)
+	}
+
+	return nil
 }

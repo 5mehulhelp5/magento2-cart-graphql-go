@@ -638,6 +638,91 @@ func comparePlaceOrder(t *testing.T, goResp, mResp gqlResponse) {
 	t.Logf("PASS: placeOrder succeeded — Go=#%s, Magento=#%s", goNum, mNum)
 }
 
+// ─── Configurable Product Comparison ────────────────────────────────────────
+
+func TestCompare_ConfigurableProduct(t *testing.T) {
+	addQ := func(cartID string) string {
+		return fmt.Sprintf(`mutation {
+			addProductsToCart(cartId: "%s", cartItems: [{
+				sku: "MH01", quantity: 1,
+				selected_options: ["Y29uZmlndXJhYmxlLzkzLzQ5", "Y29uZmlndXJhYmxlLzE0Mi8xNjY="]
+			}]) {
+				cart {
+					total_quantity
+					items {
+						uid quantity
+						product { sku name }
+						prices { price { value } row_total { value } }
+						... on ConfigurableCartItem {
+							configurable_options { id option_label value_id value_label }
+							configured_variant { sku }
+						}
+					}
+				}
+				user_errors { code message }
+			}
+		}`, cartID)
+	}
+
+	goResp := doQuery(t, `mutation { createEmptyCart }`, "")
+	mResp := doMagentoQuery(t, `mutation { createEmptyCart }`, "")
+	var goCreate, mCreate struct{ CreateEmptyCart string `json:"createEmptyCart"` }
+	json.Unmarshal(goResp.Data, &goCreate)
+	json.Unmarshal(mResp.Data, &mCreate)
+
+	goResp = doQuery(t, addQ(goCreate.CreateEmptyCart), "")
+	mResp = doMagentoQuery(t, addQ(mCreate.CreateEmptyCart), "")
+
+	if len(goResp.Errors) > 0 {
+		t.Fatalf("Go error: %s", goResp.Errors[0].Message)
+	}
+	if len(mResp.Errors) > 0 {
+		t.Fatalf("Magento error: %s", mResp.Errors[0].Message)
+	}
+
+	type configResp struct {
+		AddProductsToCart struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					Product struct{ SKU string `json:"sku"` } `json:"product"`
+					Prices  struct {
+						Price    struct{ Value float64 } `json:"price"`
+						RowTotal struct{ Value float64 } `json:"row_total"`
+					} `json:"prices"`
+					ConfigurableOptions []struct {
+						ID         int    `json:"id"`
+						ValueLabel string `json:"value_label"`
+					} `json:"configurable_options"`
+					ConfiguredVariant *struct{ SKU string `json:"sku"` } `json:"configured_variant"`
+				} `json:"items"`
+			} `json:"cart"`
+		} `json:"addProductsToCart"`
+	}
+
+	var goData, mData configResp
+	json.Unmarshal(goResp.Data, &goData)
+	json.Unmarshal(mResp.Data, &mData)
+
+	goCart := goData.AddProductsToCart.Cart
+	mCart := mData.AddProductsToCart.Cart
+
+	assertEq(t, "config.total_quantity", goCart.TotalQuantity, mCart.TotalQuantity)
+	if len(goCart.Items) > 0 && len(mCart.Items) > 0 {
+		assertEq(t, "config.product.sku", goCart.Items[0].Product.SKU, mCart.Items[0].Product.SKU)
+		assertEq(t, "config.price", goCart.Items[0].Prices.Price.Value, mCart.Items[0].Prices.Price.Value)
+		if goCart.Items[0].ConfiguredVariant != nil && mCart.Items[0].ConfiguredVariant != nil {
+			assertEq(t, "config.variant.sku", goCart.Items[0].ConfiguredVariant.SKU, mCart.Items[0].ConfiguredVariant.SKU)
+		}
+		assertEq(t, "config.options_count", len(goCart.Items[0].ConfigurableOptions), len(mCart.Items[0].ConfigurableOptions))
+	}
+
+	t.Logf("PASS: configurable product matches Magento (SKU=%s, variant=%s, price=%.2f)",
+		goCart.Items[0].Product.SKU,
+		goCart.Items[0].ConfiguredVariant.SKU,
+		goCart.Items[0].Prices.Price.Value)
+}
+
 // ─── Coupon Comparison ──────────────────────────────────────────────────────
 
 func TestCompare_CouponApplyRemove(t *testing.T) {

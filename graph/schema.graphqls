@@ -82,6 +82,23 @@ type SimpleCartItem implements CartItemInterface {
     errors: [CartItemError]
 }
 
+type ConfigurableCartItem implements CartItemInterface {
+    uid: ID!
+    quantity: Float!
+    prices: CartItemPrices
+    product: CartItemProduct!
+    errors: [CartItemError]
+    configurable_options: [SelectedConfigurableOption!]!
+    configured_variant: CartItemProduct
+}
+
+type SelectedConfigurableOption {
+    id: Int!
+    option_label: String!
+    value_id: Int!
+    value_label: String!
+}
+
 type CartItemProduct {
     sku: String!
     name: String
