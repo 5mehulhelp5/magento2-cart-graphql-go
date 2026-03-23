@@ -51,9 +51,9 @@ func NewCartService(
 	pipeline := totals.NewPipeline(
 		&totals.SubtotalCollector{},                          // 100
 		&totals.DiscountCollector{CouponRepo: couponRepo},    // 300
-		&totals.ShippingCollector{},                          // 350
-		// &totals.ShippingTaxCollector{},                    // 375 — Phase 3 (#21)
-		&totals.TaxCollector{TaxRepo: taxRepo},               // 450
+		&totals.ShippingCollector{},                                     // 350
+		&totals.ShippingTaxCollector{TaxRepo: taxRepo, CP: cp},         // 375
+		&totals.TaxCollector{TaxRepo: taxRepo},                         // 450
 		&totals.GrandTotalCollector{},                        // 550
 	)
 
@@ -650,13 +650,20 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error 
 	}
 
 	var itemsQty float64
+	isVirtual := true
 	for _, item := range items {
 		if item.ParentItemID == nil {
 			itemsQty += item.Qty
+			if item.ProductType != "virtual" && item.ProductType != "downloadable" {
+				isVirtual = false
+			}
 		}
 	}
+	if len(items) == 0 {
+		isVirtual = false
+	}
 
-	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty)
+	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty, isVirtual)
 }
 
 // collectTotals runs the pipeline without persisting — used for display and order placement.
