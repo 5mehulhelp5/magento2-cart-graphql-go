@@ -20,6 +20,7 @@ type CartService struct {
 	maskRepo     *repository.CartMaskRepository
 	itemRepo     *repository.CartItemRepository
 	addressRepo  *repository.CartAddressRepository
+	shippingRepo *repository.ShippingRepository
 	cp           *config.ConfigProvider
 }
 
@@ -28,14 +29,16 @@ func NewCartService(
 	maskRepo *repository.CartMaskRepository,
 	itemRepo *repository.CartItemRepository,
 	addressRepo *repository.CartAddressRepository,
+	shippingRepo *repository.ShippingRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	return &CartService{
 		cartRepo:    cartRepo,
 		maskRepo:    maskRepo,
 		itemRepo:    itemRepo,
-		addressRepo: addressRepo,
-		cp:          cp,
+		addressRepo:  addressRepo,
+		shippingRepo: shippingRepo,
+		cp:           cp,
 	}
 }
 
@@ -321,6 +324,44 @@ func (s *CartService) SetBillingAddress(ctx context.Context, maskedID string, in
 	return s.GetCart(ctx, maskedID)
 }
 
+// SetShippingMethods selects a shipping method on the cart.
+func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, methods []*model.ShippingMethodInput) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+
+	addrs, _ := s.addressRepo.GetByQuoteID(ctx, quoteID)
+	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
+
+	for _, method := range methods {
+		// Find shipping address
+		for _, a := range addrs {
+			if a.AddressType == "shipping" {
+				// Validate carrier/method
+				storeID := middleware.GetStoreID(ctx)
+				rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal)
+				var selectedRate *repository.ShippingRate
+				for _, r := range rates {
+					if r.CarrierCode == method.CarrierCode && r.MethodCode == method.MethodCode {
+						selectedRate = r
+						break
+					}
+				}
+				if selectedRate == nil {
+					return nil, fmt.Errorf("Carrier with such method not found: %s_%s", method.CarrierCode, method.MethodCode)
+				}
+
+				desc := selectedRate.CarrierTitle + " - " + selectedRate.MethodTitle
+				s.shippingRepo.SetShippingMethod(ctx, a.AddressID, selectedRate.CarrierCode, selectedRate.MethodCode, selectedRate.Price, desc)
+				break
+			}
+		}
+	}
+
+	return s.GetCart(ctx, maskedID)
+}
+
 // ── Mapping ─────────────────────────────────────────────────────────────────
 
 func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, maskedID string) (*model.Cart, error) {
@@ -354,10 +395,25 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 
 	// Load addresses
 	addrs, _ := s.addressRepo.GetByQuoteID(ctx, cart.EntityID)
+	storeID := middleware.GetStoreID(ctx)
 	for _, a := range addrs {
 		switch a.AddressType {
 		case "shipping":
-			result.ShippingAddresses = append(result.ShippingAddresses, s.mapShippingAddress(ctx, a))
+			sa := s.mapShippingAddress(ctx, a)
+			// Load available shipping methods
+			rates, _ := s.shippingRepo.GetAvailableRates(ctx, storeID, a.CountryID, a.RegionID, a.Postcode, cart.Subtotal)
+			for _, r := range rates {
+				available := true
+				sa.AvailableShippingMethods = append(sa.AvailableShippingMethods, &model.AvailableShippingMethod{
+					CarrierCode:  r.CarrierCode,
+					CarrierTitle: r.CarrierTitle,
+					MethodCode:   r.MethodCode,
+					MethodTitle:  r.MethodTitle,
+					Amount:       &model.Money{Value: &r.Price, Currency: &currency},
+					Available:    available,
+				})
+			}
+			result.ShippingAddresses = append(result.ShippingAddresses, sa)
 		case "billing":
 			result.BillingAddress = s.mapBillingAddress(ctx, a)
 		}
