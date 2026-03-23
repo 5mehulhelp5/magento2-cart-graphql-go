@@ -731,3 +731,39 @@ func TestDuplicateSkuMerge(t *testing.T) {
 		t.Errorf("expected 1 item (merged), got %d", len(data.Cart.Items))
 	}
 }
+
+func TestMergeCartsUnauthenticated(t *testing.T) {
+	// mergeCarts requires auth — should fail without token
+	sourceCartID := createTestCart(t)
+	addTestProduct(t, sourceCartID, "24-MB01", 1)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		mergeCarts(source_cart_id: "%s") {
+			id total_quantity
+		}
+	}`, sourceCartID), "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected auth error for unauthenticated mergeCarts")
+	}
+	expected := "The current customer isn't authorized."
+	if resp.Errors[0].Message != expected {
+		t.Errorf("error message mismatch:\n  got:    %q\n  expect: %q", resp.Errors[0].Message, expected)
+	}
+}
+
+func TestAssignCustomerToGuestCartUnauthenticated(t *testing.T) {
+	cartID := createTestCart(t)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		assignCustomerToGuestCart(cart_id: "%s") {
+			id
+		}
+	}`, cartID), "")
+	if len(resp.Errors) == 0 {
+		t.Fatal("expected auth error for unauthenticated assignCustomerToGuestCart")
+	}
+	expected := "The current customer isn't authorized."
+	if resp.Errors[0].Message != expected {
+		t.Errorf("error message mismatch:\n  got:    %q\n  expect: %q", resp.Errors[0].Message, expected)
+	}
+}

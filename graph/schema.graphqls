@@ -48,6 +48,12 @@ type Mutation {
 
     """Remove a coupon from the cart."""
     removeCouponFromCart(input: RemoveCouponFromCartInput): RemoveCouponFromCartOutput
+
+    """Merge a guest cart into the customer's cart."""
+    mergeCarts(source_cart_id: String!, destination_cart_id: String): Cart!
+
+    """Transfer a guest cart to an authenticated customer."""
+    assignCustomerToGuestCart(cart_id: String!): Cart!
 }
 
 # ─── Cart Type ───────────────────────────────────────────────────────────────

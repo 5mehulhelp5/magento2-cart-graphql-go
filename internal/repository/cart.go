@@ -136,6 +136,24 @@ func (r *CartRepository) Deactivate(ctx context.Context, entityID int, reservedO
 	return err
 }
 
+// SetCustomer assigns a customer to a cart (for assignCustomerToGuestCart).
+func (r *CartRepository) SetCustomer(ctx context.Context, entityID, customerID int) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE quote SET customer_id = ?, customer_is_guest = 0, updated_at = NOW() WHERE entity_id = ?",
+		customerID, entityID,
+	)
+	return err
+}
+
+// DeactivateSimple marks a cart as inactive without setting reserved_order_id.
+func (r *CartRepository) DeactivateSimple(ctx context.Context, entityID int) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE quote SET is_active = 0, updated_at = NOW() WHERE entity_id = ?",
+		entityID,
+	)
+	return err
+}
+
 // DB returns the underlying database connection (for product lookups).
 func (r *CartRepository) DB() *sql.DB {
 	return r.db

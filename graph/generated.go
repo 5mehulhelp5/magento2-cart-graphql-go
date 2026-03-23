@@ -171,8 +171,10 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AddProductsToCart          func(childComplexity int, cartID string, cartItems []*model.CartItemInput) int
 		ApplyCouponToCart          func(childComplexity int, input *model.ApplyCouponToCartInput) int
+		AssignCustomerToGuestCart  func(childComplexity int, cartID string) int
 		CreateEmptyCart            func(childComplexity int, input *model.CreateEmptyCartInput) int
 		CreateGuestCart            func(childComplexity int, input *model.CreateGuestCartInput) int
+		MergeCarts                 func(childComplexity int, sourceCartID string, destinationCartID *string) int
 		PlaceOrder                 func(childComplexity int, input *model.PlaceOrderInput) int
 		RemoveCouponFromCart       func(childComplexity int, input *model.RemoveCouponFromCartInput) int
 		RemoveItemFromCart         func(childComplexity int, input *model.RemoveItemFromCartInput) int
@@ -286,6 +288,8 @@ type MutationResolver interface {
 	PlaceOrder(ctx context.Context, input *model.PlaceOrderInput) (*model.PlaceOrderOutput, error)
 	ApplyCouponToCart(ctx context.Context, input *model.ApplyCouponToCartInput) (*model.ApplyCouponToCartOutput, error)
 	RemoveCouponFromCart(ctx context.Context, input *model.RemoveCouponFromCartInput) (*model.RemoveCouponFromCartOutput, error)
+	MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error)
+	AssignCustomerToGuestCart(ctx context.Context, cartID string) (*model.Cart, error)
 }
 type QueryResolver interface {
 	Cart(ctx context.Context, cartID string) (*model.Cart, error)
@@ -780,6 +784,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ApplyCouponToCart(childComplexity, args["input"].(*model.ApplyCouponToCartInput)), true
+	case "Mutation.assignCustomerToGuestCart":
+		if e.ComplexityRoot.Mutation.AssignCustomerToGuestCart == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_assignCustomerToGuestCart_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AssignCustomerToGuestCart(childComplexity, args["cart_id"].(string)), true
 	case "Mutation.createEmptyCart":
 		if e.ComplexityRoot.Mutation.CreateEmptyCart == nil {
 			break
@@ -802,6 +817,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateGuestCart(childComplexity, args["input"].(*model.CreateGuestCartInput)), true
+	case "Mutation.mergeCarts":
+		if e.ComplexityRoot.Mutation.MergeCarts == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_mergeCarts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MergeCarts(childComplexity, args["source_cart_id"].(string), args["destination_cart_id"].(*string)), true
 	case "Mutation.placeOrder":
 		if e.ComplexityRoot.Mutation.PlaceOrder == nil {
 			break
@@ -1306,6 +1332,17 @@ func (ec *executionContext) field_Mutation_applyCouponToCart_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_assignCustomerToGuestCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "cart_id", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["cart_id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createEmptyCart_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1325,6 +1362,22 @@ func (ec *executionContext) field_Mutation_createGuestCart_args(ctx context.Cont
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_mergeCarts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "source_cart_id", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["source_cart_id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "destination_cart_id", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["destination_cart_id"] = arg1
 	return args, nil
 }
 
@@ -4470,6 +4523,136 @@ func (ec *executionContext) fieldContext_Mutation_removeCouponFromCart(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_removeCouponFromCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_mergeCarts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_mergeCarts,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MergeCarts(ctx, fc.Args["source_cart_id"].(string), fc.Args["destination_cart_id"].(*string))
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_mergeCarts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_mergeCarts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_assignCustomerToGuestCart(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_assignCustomerToGuestCart,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AssignCustomerToGuestCart(ctx, fc.Args["cart_id"].(string))
+		},
+		nil,
+		ec.marshalNCart2ᚖgithubᚗcomᚋmagendooroᚋmagento2ᚑcartᚑgraphqlᚑgoᚋgraphᚋmodelᚐCart,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_assignCustomerToGuestCart(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Cart_id(ctx, field)
+			case "items":
+				return ec.fieldContext_Cart_items(ctx, field)
+			case "total_quantity":
+				return ec.fieldContext_Cart_total_quantity(ctx, field)
+			case "is_virtual":
+				return ec.fieldContext_Cart_is_virtual(ctx, field)
+			case "email":
+				return ec.fieldContext_Cart_email(ctx, field)
+			case "applied_coupons":
+				return ec.fieldContext_Cart_applied_coupons(ctx, field)
+			case "shipping_addresses":
+				return ec.fieldContext_Cart_shipping_addresses(ctx, field)
+			case "billing_address":
+				return ec.fieldContext_Cart_billing_address(ctx, field)
+			case "available_payment_methods":
+				return ec.fieldContext_Cart_available_payment_methods(ctx, field)
+			case "selected_payment_method":
+				return ec.fieldContext_Cart_selected_payment_method(ctx, field)
+			case "prices":
+				return ec.fieldContext_Cart_prices(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Cart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_assignCustomerToGuestCart_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9327,6 +9510,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_removeCouponFromCart(ctx, field)
 			})
+		case "mergeCarts":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_mergeCarts(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "assignCustomerToGuestCart":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_assignCustomerToGuestCart(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

@@ -266,6 +266,147 @@ func (s *CartService) SetGuestEmail(ctx context.Context, maskedID, email string)
 	return s.GetCart(ctx, maskedID)
 }
 
+// MergeCarts merges a guest cart into the customer's cart.
+// Items from source are copied to destination (quantities summed for same SKU).
+// Source cart is deactivated after merge.
+func (s *CartService) MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error) {
+	customerID := middleware.GetCustomerID(ctx)
+	if customerID == 0 {
+		return nil, carterr.ErrUnauthorized
+	}
+
+	// Resolve source cart
+	sourceQuoteID, err := s.maskRepo.Resolve(ctx, sourceCartID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(sourceCartID)
+	}
+	sourceCart, err := s.cartRepo.GetByID(ctx, sourceQuoteID)
+	if err != nil || sourceCart.IsActive != 1 {
+		return nil, carterr.ErrCartNotActive
+	}
+
+	// Resolve destination cart (or use customer's active cart)
+	var destMaskedID string
+	var destQuoteID int
+	if destinationCartID != nil && *destinationCartID != "" {
+		destMaskedID = *destinationCartID
+		destQuoteID, err = s.maskRepo.Resolve(ctx, destMaskedID)
+		if err != nil {
+			return nil, carterr.ErrCartNotFound(destMaskedID)
+		}
+	} else {
+		// Get customer's active cart
+		storeID := middleware.GetStoreID(ctx)
+		destCart, err := s.cartRepo.GetActiveByCustomerID(ctx, customerID, storeID)
+		if err != nil {
+			// Create one if doesn't exist
+			newID, err := s.cartRepo.Create(ctx, storeID, &customerID)
+			if err != nil {
+				return nil, err
+			}
+			destQuoteID = newID
+		} else {
+			destQuoteID = destCart.EntityID
+		}
+		destMaskedID, err = s.maskRepo.GetMaskedID(ctx, destQuoteID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Copy items from source to destination (merge quantities for same product)
+	sourceItems, _ := s.itemRepo.GetByQuoteID(ctx, sourceQuoteID)
+	for _, item := range sourceItems {
+		if item.ParentItemID != nil {
+			continue // skip child items, they follow their parent
+		}
+		if item.ProductType == "configurable" {
+			// For configurable items, insert parent+child in destination
+			parentID, _ := s.itemRepo.AddConfigurable(ctx, destQuoteID, item.ProductID, item.SKU, item.Name, "configurable", item.Qty, item.Price)
+			// Find child item
+			for _, child := range sourceItems {
+				if child.ParentItemID != nil && *child.ParentItemID == item.ItemID {
+					s.itemRepo.AddChild(ctx, destQuoteID, child.ProductID, child.SKU, child.Name, "simple", child.Qty, parentID)
+					break
+				}
+			}
+		} else {
+			s.itemRepo.Add(ctx, destQuoteID, item.ProductID, item.SKU, item.Name, item.ProductType, item.Qty, item.Price)
+		}
+	}
+
+	// Deactivate source cart
+	s.cartRepo.DeactivateSimple(ctx, sourceQuoteID)
+
+	// Recalculate destination totals
+	if err := s.recalculateTotals(ctx, destQuoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", destQuoteID).Msg("totals recalculation failed after merge")
+	}
+
+	return s.GetCart(ctx, destMaskedID)
+}
+
+// AssignCustomerToGuestCart transfers a guest cart to an authenticated customer.
+// The customer's old active cart is deactivated and its items are merged into the guest cart.
+func (s *CartService) AssignCustomerToGuestCart(ctx context.Context, guestCartID string) (*model.Cart, error) {
+	customerID := middleware.GetCustomerID(ctx)
+	if customerID == 0 {
+		return nil, carterr.ErrUnauthorized
+	}
+
+	guestQuoteID, err := s.maskRepo.Resolve(ctx, guestCartID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(guestCartID)
+	}
+	guestCart, err := s.cartRepo.GetByID(ctx, guestQuoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(guestCartID)
+	}
+
+	// Guest cart must not already belong to a customer
+	if guestCart.CustomerID != nil && *guestCart.CustomerID > 0 {
+		return nil, carterr.ErrCartForbidden(guestCartID)
+	}
+
+	storeID := middleware.GetStoreID(ctx)
+
+	// If customer has an existing active cart, merge its items into the guest cart, then deactivate
+	if oldCart, err := s.cartRepo.GetActiveByCustomerID(ctx, customerID, storeID); err == nil {
+		oldItems, _ := s.itemRepo.GetByQuoteID(ctx, oldCart.EntityID)
+		for _, item := range oldItems {
+			if item.ParentItemID != nil {
+				continue
+			}
+			if item.ProductType == "configurable" {
+				parentID, _ := s.itemRepo.AddConfigurable(ctx, guestQuoteID, item.ProductID, item.SKU, item.Name, "configurable", item.Qty, item.Price)
+				for _, child := range oldItems {
+					if child.ParentItemID != nil && *child.ParentItemID == item.ItemID {
+						s.itemRepo.AddChild(ctx, guestQuoteID, child.ProductID, child.SKU, child.Name, "simple", child.Qty, parentID)
+						break
+					}
+				}
+			} else {
+				s.itemRepo.Add(ctx, guestQuoteID, item.ProductID, item.SKU, item.Name, item.ProductType, item.Qty, item.Price)
+			}
+		}
+		s.cartRepo.DeactivateSimple(ctx, oldCart.EntityID)
+	}
+
+	// Assign customer to guest cart
+	s.cartRepo.SetCustomer(ctx, guestQuoteID, customerID)
+
+	// Recalculate totals
+	if err := s.recalculateTotals(ctx, guestQuoteID); err != nil {
+		log.Error().Err(err).Int("quote_id", guestQuoteID).Msg("totals recalculation failed after assign")
+	}
+
+	maskedID, err := s.maskRepo.GetMaskedID(ctx, guestQuoteID)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetCart(ctx, maskedID)
+}
+
 // ApplyCoupon validates and applies a coupon code to the cart.
 func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode string) (*model.Cart, error) {
 	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
