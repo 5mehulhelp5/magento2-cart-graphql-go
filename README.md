@@ -1,6 +1,6 @@
 # magento2-cart-graphql-go
 
-High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior.
+High-performance Go drop-in replacement for Magento 2's cart and checkout GraphQL operations. Reads from and writes to the same MySQL database as Magento, producing identical cart totals and order placement behavior. Phase 1 complete with full guest checkout flow verified field-by-field against Magento 2.4.8 PHP (8 tests passing).
 
 ## Quick Start
 
@@ -37,7 +37,7 @@ Default port: **8084**.
 | `setShippingMethodsOnCart` | ✅ | Tablerate, flatrate, freeshipping |
 | `setPaymentMethodOnCart` | ✅ | checkmo, free, banktransfer |
 | `setGuestEmailOnCart` | ✅ | |
-| `placeOrder` | 🔲 Phase 1h | Transactional quote→order |
+| `placeOrder` | ✅ | Transactional quote→order with inventory reservation |
 | `applyCouponToCart` | 🔲 Phase 2a | Salesrule integration |
 | `removeCouponFromCart` | 🔲 Phase 2a | |
 | `mergeCarts` | 🔲 Phase 2d | Guest→customer merge |
@@ -49,8 +49,8 @@ Default port: **8084**.
 | Cart ID masking | ✅ | Security: 32-char random IDs, never expose entity_id |
 | Subtotal calculation | ✅ | Sum of item row_totals |
 | US state tax | ✅ | Region-based rates from tax_calculation_rate |
-| Product tax class | ✅ | Only tax_class_id > 0 products are taxed |
-| Shipping rates | ✅ | Tablerate, flatrate, freeshipping carriers |
+| Product tax class | ✅ | Uses eav_attribute.default_value fallback |
+| Shipping rates | ✅ | Tablerate (website-scoped), flatrate (per-item), freeshipping |
 | Payment methods | ✅ | checkmo, free, banktransfer, cashondelivery |
 | Duplicate SKU merge | ✅ | Same SKU increments quantity |
 | Stock validation | ✅ | Checks cataloginventory_stock_item |
@@ -71,6 +71,27 @@ Default port: **8084**.
 | `MAGENTO_CRYPT_KEY` | — | Required for JWT auth |
 | `SERVER_PORT` | `8084` | HTTP listen port |
 | `LOG_LEVEL` | `info` | debug, info, warn, error |
+
+## Tests
+
+```bash
+# All tests (requires Magento at :8080 for comparison tests)
+GOTOOLCHAIN=auto go test ./tests/ -v -timeout 300s -count=1
+
+# Integration only (no Magento needed)
+GOTOOLCHAIN=auto go test ./tests/ -run "^Test[^C]" -v -timeout 60s -count=1
+```
+
+| Test | Type | What it verifies |
+|------|------|-----------------|
+| TestCreateEmptyCart | Integration | 32-char masked ID generation |
+| TestCreateGuestCart | Integration | Cart object with zero totals |
+| TestAddProductToCart | Integration | SKU, price, qty, row_total |
+| TestAddInvalidProduct | Integration | PRODUCT_NOT_FOUND user error |
+| TestInvalidCartID | Integration | Error on malformed cart ID |
+| TestCartNotFound | Integration | Error on nonexistent cart |
+| TestCompare_FullCheckoutFlow | Comparison | 9-step checkout vs Magento PHP |
+| TestCompare_EmptyCartPlaceOrder | Comparison | Error handling on empty cart |
 
 ## Architecture
 
