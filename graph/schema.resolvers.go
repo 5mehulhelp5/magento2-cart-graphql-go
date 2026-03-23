@@ -81,7 +81,11 @@ func (r *mutationResolver) SetShippingMethodsOnCart(ctx context.Context, input *
 
 // SetPaymentMethodOnCart is the resolver for the setPaymentMethodOnCart field.
 func (r *mutationResolver) SetPaymentMethodOnCart(ctx context.Context, input *model.SetPaymentMethodOnCartInput) (*model.SetPaymentMethodOnCartOutput, error) {
-	return nil, fmt.Errorf("not implemented: SetPaymentMethodOnCart")
+	cart, err := r.CartService.SetPaymentMethod(ctx, input.CartID, input.PaymentMethod.Code)
+	if err != nil {
+		return nil, err
+	}
+	return &model.SetPaymentMethodOnCartOutput{Cart: cart}, nil
 }
 
 // SetGuestEmailOnCart is the resolver for the setGuestEmailOnCart field.

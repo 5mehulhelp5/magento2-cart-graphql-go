@@ -25,8 +25,9 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 	itemRepo := repository.NewCartItemRepository(db)
 	addressRepo := repository.NewCartAddressRepository(db)
 	shippingRepo := repository.NewShippingRepository(db, cp)
+	paymentRepo := repository.NewPaymentRepository(db, cp)
 
-	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, cp)
+	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, paymentRepo, cp)
 
 	return &Resolver{
 		CartService: cartService,
