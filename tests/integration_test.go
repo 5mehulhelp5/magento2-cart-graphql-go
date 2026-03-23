@@ -622,6 +622,93 @@ func TestRemoveCoupon(t *testing.T) {
 	}
 }
 
+func TestAddConfigurableProduct(t *testing.T) {
+	cartID := createTestCart(t)
+
+	// MH01 = Chaz Kangeroo Hoodie (configurable)
+	// selected_options: color=Black(49), size=XS(166)
+	// configurable/93/49 → Y29uZmlndXJhYmxlLzkzLzQ5
+	// configurable/142/166 → Y29uZmlndXJhYmxlLzE0Mi8xNjY=
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		addProductsToCart(cartId: "%s", cartItems: [{
+			sku: "MH01",
+			quantity: 1,
+			selected_options: ["Y29uZmlndXJhYmxlLzkzLzQ5", "Y29uZmlndXJhYmxlLzE0Mi8xNjY="]
+		}]) {
+			cart {
+				total_quantity
+				items {
+					uid
+					quantity
+					product { sku name }
+					... on ConfigurableCartItem {
+						configurable_options { id option_label value_id value_label }
+						configured_variant { sku name }
+					}
+				}
+			}
+			user_errors { code message }
+		}
+	}`, cartID), "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("add configurable: %s", resp.Errors[0].Message)
+	}
+
+	var data struct {
+		AddProductsToCart struct {
+			Cart struct {
+				TotalQuantity float64 `json:"total_quantity"`
+				Items         []struct {
+					UID      string  `json:"uid"`
+					Quantity float64 `json:"quantity"`
+					Product  struct {
+						SKU  string `json:"sku"`
+						Name string `json:"name"`
+					} `json:"product"`
+					ConfigurableOptions []struct {
+						ID         int    `json:"id"`
+						OptionLabel string `json:"option_label"`
+						ValueID    int    `json:"value_id"`
+						ValueLabel string `json:"value_label"`
+					} `json:"configurable_options"`
+					ConfiguredVariant *struct {
+						SKU  string `json:"sku"`
+						Name string `json:"name"`
+					} `json:"configured_variant"`
+				} `json:"items"`
+			} `json:"cart"`
+			UserErrors []struct{ Code, Message string } `json:"user_errors"`
+		} `json:"addProductsToCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.AddProductsToCart.UserErrors) > 0 {
+		t.Fatalf("user errors: %v", data.AddProductsToCart.UserErrors)
+	}
+
+	if data.AddProductsToCart.Cart.TotalQuantity != 1 {
+		t.Errorf("expected total_quantity 1, got %v", data.AddProductsToCart.Cart.TotalQuantity)
+	}
+
+	if len(data.AddProductsToCart.Cart.Items) != 1 {
+		t.Fatalf("expected 1 item (parent only), got %d", len(data.AddProductsToCart.Cart.Items))
+	}
+
+	item := data.AddProductsToCart.Cart.Items[0]
+	if item.Product.SKU != "MH01" {
+		t.Errorf("expected parent SKU MH01, got %s", item.Product.SKU)
+	}
+	if item.ConfiguredVariant == nil {
+		t.Fatal("expected configured_variant to be set")
+	}
+	if item.ConfiguredVariant.SKU != "MH01-XS-Black" {
+		t.Errorf("expected child SKU MH01-XS-Black, got %s", item.ConfiguredVariant.SKU)
+	}
+	if len(item.ConfigurableOptions) != 2 {
+		t.Errorf("expected 2 configurable options, got %d", len(item.ConfigurableOptions))
+	}
+}
+
 func TestDuplicateSkuMerge(t *testing.T) {
 	cartID := createTestCart(t)
 	addTestProduct(t, cartID, "24-MB01", 1)
