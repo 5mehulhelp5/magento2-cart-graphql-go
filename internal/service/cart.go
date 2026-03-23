@@ -650,13 +650,20 @@ func (s *CartService) recalculateTotals(ctx context.Context, quoteID int) error 
 	}
 
 	var itemsQty float64
+	isVirtual := true
 	for _, item := range items {
 		if item.ParentItemID == nil {
 			itemsQty += item.Qty
+			if item.ProductType != "virtual" && item.ProductType != "downloadable" {
+				isVirtual = false
+			}
 		}
 	}
+	if len(items) == 0 {
+		isVirtual = false
+	}
 
-	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty)
+	return s.cartRepo.UpdateTotals(ctx, quoteID, total.Subtotal, total.GrandTotal, total.DiscountAmount, len(items), itemsQty, isVirtual)
 }
 
 // collectTotals runs the pipeline without persisting — used for display and order placement.
