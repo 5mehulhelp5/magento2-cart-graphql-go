@@ -21,6 +21,7 @@ type CartService struct {
 	itemRepo     *repository.CartItemRepository
 	addressRepo  *repository.CartAddressRepository
 	shippingRepo *repository.ShippingRepository
+	paymentRepo  *repository.PaymentRepository
 	cp           *config.ConfigProvider
 }
 
@@ -30,6 +31,7 @@ func NewCartService(
 	itemRepo *repository.CartItemRepository,
 	addressRepo *repository.CartAddressRepository,
 	shippingRepo *repository.ShippingRepository,
+	paymentRepo *repository.PaymentRepository,
 	cp *config.ConfigProvider,
 ) *CartService {
 	return &CartService{
@@ -38,6 +40,7 @@ func NewCartService(
 		itemRepo:    itemRepo,
 		addressRepo:  addressRepo,
 		shippingRepo: shippingRepo,
+		paymentRepo:  paymentRepo,
 		cp:           cp,
 	}
 }
@@ -364,6 +367,32 @@ func (s *CartService) SetShippingMethods(ctx context.Context, maskedID string, m
 
 // ── Mapping ─────────────────────────────────────────────────────────────────
 
+// SetPaymentMethod sets the payment method on the cart.
+func (s *CartService) SetPaymentMethod(ctx context.Context, maskedID string, methodCode string) (*model.Cart, error) {
+	quoteID, err := s.maskRepo.Resolve(ctx, maskedID)
+	if err != nil {
+		return nil, fmt.Errorf("Could not find a cart with ID \"%s\"", maskedID)
+	}
+
+	// Validate method
+	storeID := middleware.GetStoreID(ctx)
+	cart, _ := s.cartRepo.GetByID(ctx, quoteID)
+	available := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
+	found := false
+	for _, m := range available {
+		if m.Code == methodCode {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("The requested Payment Method is not available.")
+	}
+
+	s.paymentRepo.SetPaymentMethod(ctx, quoteID, methodCode)
+	return s.GetCart(ctx, maskedID)
+}
+
 func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, maskedID string) (*model.Cart, error) {
 	items, _ := s.itemRepo.GetByQuoteID(ctx, cart.EntityID)
 	currency := model.CurrencyEnum(cart.QuoteCurrencyCode)
@@ -421,6 +450,21 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 
 	if cart.CouponCode != nil {
 		result.AppliedCoupons = []*model.AppliedCoupon{{Code: *cart.CouponCode}}
+	}
+
+	// Available payment methods
+	availablePayments := s.paymentRepo.GetAvailableMethods(ctx, storeID, cart.GrandTotal)
+	for _, pm := range availablePayments {
+		result.AvailablePaymentMethods = append(result.AvailablePaymentMethods, &model.AvailablePaymentMethod{
+			Code: pm.Code, Title: pm.Title,
+		})
+	}
+
+	// Selected payment method
+	if selected, err := s.paymentRepo.GetSelectedMethod(ctx, cart.EntityID); err == nil {
+		result.SelectedPaymentMethod = &model.SelectedPaymentMethod{
+			Code: selected.Code, Title: &selected.Title,
+		}
 	}
 
 	return result, nil
