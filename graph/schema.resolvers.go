@@ -130,6 +130,16 @@ func (r *mutationResolver) RemoveCouponFromCart(ctx context.Context, input *mode
 	return &model.RemoveCouponFromCartOutput{Cart: cart}, nil
 }
 
+// MergeCarts is the resolver for the mergeCarts field.
+func (r *mutationResolver) MergeCarts(ctx context.Context, sourceCartID string, destinationCartID *string) (*model.Cart, error) {
+	return r.CartService.MergeCarts(ctx, sourceCartID, destinationCartID)
+}
+
+// AssignCustomerToGuestCart is the resolver for the assignCustomerToGuestCart field.
+func (r *mutationResolver) AssignCustomerToGuestCart(ctx context.Context, cartID string) (*model.Cart, error) {
+	return r.CartService.AssignCustomerToGuestCart(ctx, cartID)
+}
+
 // Cart is the resolver for the cart field.
 func (r *queryResolver) Cart(ctx context.Context, cartID string) (*model.Cart, error) {
 	return r.CartService.GetCart(ctx, cartID)
