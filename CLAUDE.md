@@ -49,11 +49,13 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 
 ## Architecture
 
-- **ConfigProvider** from day 1 — no raw `core_config_data` queries anywhere
+- **Totals Pipeline** (`internal/totals/`) — Magento-inspired collector pipeline: `SubtotalCollector(100) → ShippingCollector(350) → TaxCollector(450) → GrandTotalCollector(550)`. Adding coupons or tax-on-shipping = add one collector file. Single source of truth for totals (recalculate, display, and order all use same pipeline).
+- **Carrier Registry** (`internal/shipping/`) — Strategy pattern: each carrier (flatrate, tablerate, freeshipping) implements `Carrier` interface. Registry auto-collects from active carriers. Adding new carriers = one file.
+- **Error Constants** (`internal/errors/`) — All Magento-compatible error messages in one package. Grep-able, testable.
+- **ConfigProvider** — no raw `core_config_data` queries anywhere
 - **Cart ID masking** — all external operations use 32-char masked IDs from `quote_id_mask`
-- **Totals recalculation** — runs after every cart modification (add/remove/update/address/shipping)
-- **Tax** — looks up `tax_calculation_rate` → `tax_calculation` → `tax_calculation_rule` matching country/region + product/customer tax class. Falls back to `eav_attribute.default_value` for product tax class.
-- **Region resolution** — when `region_id` is provided, stores full name from `directory_country_region` (e.g., "Texas" not "TX")
+- **Tax** — batch `GetProductTaxClassIDs` loads all classes in single query. Falls back to `eav_attribute.default_value`.
+- **Region resolution** — when `region_id` is provided, stores full name from `directory_country_region`
 - **Shipping** — tablerate uses `price` column (not `cost`), scoped by `website_id`; flatrate defaults active with per-item pricing
 
 ## Key Database Tables
