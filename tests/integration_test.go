@@ -1091,3 +1091,56 @@ func TestEUVATCountryLevelTax(t *testing.T) {
 
 	t.Logf("PASS: EU VAT — DE 19%% on $34 = $%.2f tax, grand_total=$%.2f", expectedTax, prices.GrandTotal.Value)
 }
+
+func TestAddGroupedProductChild(t *testing.T) {
+	// Adding a child of a grouped product works as a regular simple product
+	// 24-WG085 is a child of grouped product 24-WG085_Group ($14)
+	cartID := createTestCart(t)
+	addTestProduct(t, cartID, "24-WG085", 1)
+
+	resp := doQuery(t, `{ cart(cart_id: "`+cartID+`") { total_quantity items { product { sku } prices { price { value } } } } }`, "")
+	var data struct {
+		Cart struct {
+			TotalQuantity float64 `json:"total_quantity"`
+			Items         []struct {
+				Product struct{ SKU string `json:"sku"` } `json:"product"`
+				Prices  struct{ Price struct{ Value float64 } `json:"price"` } `json:"prices"`
+			} `json:"items"`
+		} `json:"cart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if data.Cart.TotalQuantity != 1 {
+		t.Errorf("expected total_quantity 1, got %v", data.Cart.TotalQuantity)
+	}
+	if len(data.Cart.Items) != 1 || data.Cart.Items[0].Product.SKU != "24-WG085" {
+		t.Errorf("expected item 24-WG085, got %v", data.Cart.Items)
+	}
+	if data.Cart.Items[0].Prices.Price.Value != 14 {
+		t.Errorf("expected price 14, got %v", data.Cart.Items[0].Prices.Price.Value)
+	}
+}
+
+func TestAddGroupedProductDirectly(t *testing.T) {
+	// Adding the grouped product SKU directly should error
+	cartID := createTestCart(t)
+
+	resp := doQuery(t, fmt.Sprintf(`mutation {
+		addProductsToCart(cartId: "%s", cartItems: [{sku: "24-WG085_Group", quantity: 1}]) {
+			cart { total_quantity }
+			user_errors { code message }
+		}
+	}`, cartID), "")
+
+	var data struct {
+		AddProductsToCart struct {
+			UserErrors []struct{ Code, Message string } `json:"user_errors"`
+		} `json:"addProductsToCart"`
+	}
+	json.Unmarshal(resp.Data, &data)
+
+	if len(data.AddProductsToCart.UserErrors) == 0 {
+		t.Fatal("expected user error for grouped product added directly")
+	}
+	t.Logf("PASS: grouped product direct add returns error: %s", data.AddProductsToCart.UserErrors[0].Message)
+}
