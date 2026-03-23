@@ -192,6 +192,13 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 					Message: err.Error(),
 				})
 			}
+		} else if product.ProductType == "grouped" {
+			// Grouped products can't be added directly — client must add child SKUs
+			// with parent_sku pointing to the grouped product
+			userErrors = append(userErrors, &model.CartUserInputError{
+				Code:    model.CartUserInputErrorTypeUndefined,
+				Message: fmt.Sprintf("Please specify the quantity of product(s)."),
+			})
 		} else if product.ProductType == "bundle" && len(input.SelectedOptions) > 0 {
 			if err := s.addBundleProduct(ctx, quoteID, storeID, product, input); err != nil {
 				userErrors = append(userErrors, &model.CartUserInputError{
