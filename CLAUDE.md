@@ -25,8 +25,6 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 - Coupon codes: applyCouponToCart/removeCouponFromCart with by_percent, by_fixed, cart_fixed via DiscountCollector pipeline
 
 ### Known gaps (documented as GitHub issues)
-- PlaceOrderOutput schema uses simplified `PlacedOrder{number}` instead of Magento's `CustomerOrder` type with `errors: [PlaceOrderError!]!` field (#29)
-- Discount amounts not yet propagated to placed order sales_order rows (#30)
 - `product_options` JSON not stored on sales_order_item
 - `remote_ip` not captured on sales_order
 - `email_sent` not set (Go doesn't send order emails)
