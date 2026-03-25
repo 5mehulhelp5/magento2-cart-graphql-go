@@ -53,7 +53,7 @@ func NewCartService(
 		&totals.DiscountCollector{CouponRepo: couponRepo},    // 300
 		&totals.ShippingCollector{},                                     // 350
 		&totals.ShippingTaxCollector{TaxRepo: taxRepo, CP: cp},         // 375
-		&totals.TaxCollector{TaxRepo: taxRepo},                         // 450
+		&totals.TaxCollector{TaxRepo: taxRepo, CP: cp},                  // 450
 		&totals.GrandTotalCollector{},                        // 550
 	)
 
@@ -949,10 +949,8 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 
 	// Compute totals via pipeline (single source of truth for tax/totals)
 	displayTotals, _ := s.collectTotals(ctx, cart, items, addrs)
-	var totalTax float64
 	var appliedTaxes []*model.CartTaxItem
 	if displayTotals != nil {
-		totalTax = displayTotals.TaxAmount
 		for _, at := range displayTotals.AppliedTaxes {
 			amt := at.Amount
 			appliedTaxes = append(appliedTaxes, &model.CartTaxItem{
@@ -962,7 +960,20 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		}
 	}
 
-	subtotalInclTax := cart.Subtotal + totalTax
+	// Product-only tax (exclude shipping tax for subtotal display)
+	var productTaxAmount float64
+	if displayTotals != nil {
+		productTaxAmount = displayTotals.TaxAmount - displayTotals.ShippingTaxAmount
+	}
+
+	var subtotalInclTax float64
+	if displayTotals != nil && displayTotals.TaxIncludedInPrice {
+		// Prices already include tax: subtotal_including = subtotal (the price itself),
+		// subtotal_excluding = subtotal - extracted product tax
+		subtotalInclTax = cart.Subtotal
+	} else {
+		subtotalInclTax = cart.Subtotal + productTaxAmount
+	}
 
 	// Compute discount for display
 	var discountAmount float64
@@ -991,7 +1002,7 @@ func (s *CartService) mapCart(ctx context.Context, cart *repository.CartData, ma
 		Email:         cart.CustomerEmail,
 		Prices: &model.CartPrices{
 			GrandTotal:                          &model.Money{Value: &cart.GrandTotal, Currency: &currency},
-			SubtotalExcludingTax:                &model.Money{Value: &cart.Subtotal, Currency: &currency},
+			SubtotalExcludingTax:                &model.Money{Value: subtotalExclTax(cart.Subtotal, displayTotals), Currency: &currency},
 			SubtotalIncludingTax:                &model.Money{Value: &subtotalInclTax, Currency: &currency},
 			SubtotalWithDiscountExcludingTax:     &model.Money{Value: &subtotalWithDiscount, Currency: &currency},
 			AppliedTaxes:                         appliedTaxes,
@@ -1101,6 +1112,17 @@ func (s *CartService) mapBillingAddress(ctx context.Context, a *repository.CartA
 		}
 	}
 	return addr
+}
+
+// subtotalExclTax returns the subtotal before tax.
+// For inclusive pricing the product tax is extracted from the row totals,
+// so the tax-exclusive subtotal = subtotal - product_tax.
+func subtotalExclTax(subtotal float64, t *totals.Total) *float64 {
+	if t != nil && t.TaxIncludedInPrice {
+		excl := subtotal - (t.TaxAmount - t.ShippingTaxAmount)
+		return &excl
+	}
+	return &subtotal
 }
 
 func (s *CartService) mapCartItem(ctx context.Context, item *repository.CartItemData, allItems []*repository.CartItemData, currency model.CurrencyEnum) model.CartItemInterface {

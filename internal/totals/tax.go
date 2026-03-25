@@ -3,6 +3,7 @@ package totals
 import (
 	"context"
 
+	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 )
 
@@ -14,8 +15,14 @@ import (
 //  2. Find matching tax rate by country + region (from tax_calculation_rate)
 //  3. Verify rate is linked to a rule matching product + customer tax class
 //  4. Apply rate to taxable item row totals
+//
+// When tax/calculation/price_includes_tax = 1 (inclusive pricing), tax is
+// extracted from the price rather than added on top:
+//
+//	tax = rowTotal * rate / (100 + rate)
 type TaxCollector struct {
 	TaxRepo *repository.TaxRepository
+	CP      *config.ConfigProvider
 }
 
 func (c *TaxCollector) Code() string { return "tax" }
@@ -26,6 +33,12 @@ func (c *TaxCollector) Collect(ctx context.Context, cc *CollectorContext, total 
 	}
 	if len(cc.Items) == 0 {
 		return nil
+	}
+
+	// Determine if catalog prices already include tax
+	priceIncludesTax := c.CP.GetInt("tax/calculation/price_includes_tax", cc.StoreID, 0) == 1
+	if priceIncludesTax {
+		total.TaxIncludedInPrice = true
 	}
 
 	// Batch-load product tax class IDs in ONE query
@@ -62,7 +75,7 @@ func (c *TaxCollector) Collect(ctx context.Context, cc *CollectorContext, total 
 	// TODO: resolve from customer_group when customer carts are supported
 	customerTaxClassID := 3
 
-	taxResults, err := c.TaxRepo.CalculateTax(ctx, cc.Address.CountryID, regionID, postcode, cc.Items, customerTaxClassID)
+	taxResults, err := c.TaxRepo.CalculateTax(ctx, cc.Address.CountryID, regionID, postcode, cc.Items, customerTaxClassID, priceIncludesTax)
 	if err != nil {
 		return err
 	}

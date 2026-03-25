@@ -19,6 +19,15 @@ type Total struct {
 	TaxAmount      float64
 	GrandTotal     float64
 
+	// ShippingTaxAmount is the tax on shipping only.
+	// Tracked separately so GrandTotalCollector can exclude product tax
+	// when price_includes_tax is active (product tax is already in Subtotal).
+	ShippingTaxAmount float64
+
+	// TaxIncludedInPrice is true when tax/calculation/price_includes_tax is enabled.
+	// In this mode product tax is extracted from prices, not added on top.
+	TaxIncludedInPrice bool
+
 	// Per-item tax breakdown (itemID → tax amount)
 	ItemTaxes map[int]float64
 

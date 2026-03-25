@@ -51,7 +51,8 @@ func (c *ShippingTaxCollector) Collect(ctx context.Context, cc *CollectorContext
 		ProductTaxClassID: shippingTaxClassID,
 	}
 
-	taxResults, err := c.TaxRepo.CalculateTax(ctx, cc.Address.CountryID, regionID, postcode, []*repository.CartItemData{shippingItem}, customerTaxClassID)
+	// Shipping tax is always exclusive (not affected by price_includes_tax)
+	taxResults, err := c.TaxRepo.CalculateTax(ctx, cc.Address.CountryID, regionID, postcode, []*repository.CartItemData{shippingItem}, customerTaxClassID, false)
 	if err != nil {
 		return nil // skip shipping tax on error
 	}
@@ -59,6 +60,7 @@ func (c *ShippingTaxCollector) Collect(ctx context.Context, cc *CollectorContext
 	for _, tr := range taxResults {
 		shippingTax := math.Round(tr.TaxAmount*100) / 100
 		total.TaxAmount += shippingTax
+		total.ShippingTaxAmount += shippingTax
 		total.AppliedTaxes = append(total.AppliedTaxes, AppliedTax{
 			Label:  tr.Label + " (shipping)",
 			Amount: shippingTax,
