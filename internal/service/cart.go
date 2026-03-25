@@ -15,6 +15,7 @@ import (
 	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
 	cartmapper "github.com/magendooro/magento2-cart-graphql-go/internal/mapper"
 	"github.com/magendooro/magento2-go-common/middleware"
+	"github.com/magendooro/magento2-cart-graphql-go/internal/order"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/totals"
@@ -688,12 +689,9 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals collection for order failed")
 	}
-	var totalTax float64
-	if orderTotals != nil {
-		totalTax = orderTotals.TaxAmount
-	}
 
-	incrementID, err := s.orderRepo.PlaceOrder(ctx, cart, items, addrs, payment.Code, totalTax)
+	orderIn := order.CartToOrder(cart, items, addrs, payment.Code, orderTotals)
+	incrementID, err := order.Place(ctx, s.orderRepo.DB(), orderIn)
 	if err != nil {
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("place order failed")
 		return orderErr(model.PlaceOrderErrorCodesUnableToPlaceOrder, carterr.ErrPlaceOrderFailed.Error()), nil
