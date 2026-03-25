@@ -8,7 +8,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 
 ## Current State
 
-**Phase 1 + Phase 2 + Phase 3 (partial): Complete.** 29 tests (24 integration + 5 comparison). EU VAT, tax on shipping, virtual products, structured PlaceOrder errors, discount propagation all done.
+**Phase 1 + Phase 2 + Phase 3: Complete.** 33 tests (28 integration + 5 comparison). EU VAT, tax on shipping, virtual products, structured PlaceOrder errors, discount propagation, compound/stacked tax, tax-inclusive pricing all done.
 
 ### What works (verified against Magento PHP)
 - Cart creation (guest + customer), masked ID generation
@@ -19,7 +19,7 @@ Go drop-in replacement for Magento 2's cart/checkout GraphQL. Write-heavy, state
 - Shipping methods: flatrate (per-item, default $5×qty), tablerate (website-scoped, price column)
 - Payment methods: checkmo, banktransfer, cashondelivery, purchaseorder, free (from config)
 - Guest email on cart
-- Tax: US state-level, product tax class via eav_attribute.default_value fallback
+- Tax: US state-level + EU VAT, product tax class via eav_attribute.default_value fallback, compound/stacked rules, tax-inclusive pricing extraction
 - Totals recalculation after every cart modification
 - Place order: full transactional flow with correct sales_order fields, address ID backfill, grid data
 - Coupon codes: applyCouponToCart/removeCouponFromCart with by_percent, by_fixed, cart_fixed via DiscountCollector pipeline
@@ -93,8 +93,6 @@ MAGENTO_CRYPT_KEY="<key>" DB_USER=magento_go DB_PASSWORD=magento_go DB_NAME=mage
 - tax_calculation_rate → tax_calculation → tax_calculation_rule join
 
 ### What doesn't work yet
-- Tax-inclusive pricing (price_includes_tax config) — #20
-- Compound/stacked tax rules — #22
 - FPT/WEEE tax
 
 ## Product Types

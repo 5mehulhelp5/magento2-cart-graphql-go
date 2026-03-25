@@ -41,10 +41,13 @@ func NewTaxRepository(db *sql.DB) *TaxRepository {
 //     the product's tax_class_id and customer's tax_class_id
 //  3. Apply rate to taxable item subtotals
 //
-// Scope: US state-level tax only (region-based). No VAT/GST, no compound tax,
-// no tax-inclusive pricing, no cross-border tax. EU tax support requires a
-// separate implementation with country-level rates and VAT ID validation.
-func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regionID int, postcode string, items []*CartItemData, customerTaxClassID int) ([]*TaxResult, error) {
+// When priceIncludesTax is true (tax/calculation/price_includes_tax = 1),
+// tax is extracted from the row total using:
+//
+//	tax = rowTotal * rate / (100 + rate)
+//
+// Otherwise the standard exclusive formula is used: tax = rowTotal * rate / 100.
+func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regionID int, postcode string, items []*CartItemData, customerTaxClassID int, priceIncludesTax bool) ([]*TaxResult, error) {
 	if len(items) == 0 || countryID == "" {
 		return nil, nil
 	}
@@ -128,7 +131,13 @@ func (r *TaxRepository) CalculateTax(ctx context.Context, countryID string, regi
 				if r.productClassID != item.ProductTaxClassID {
 					continue
 				}
-				rateTax := taxableAmount * r.rate / 100.0
+				var rateTax float64
+			if priceIncludesTax {
+				// Extraction: tax already embedded in price
+				rateTax = taxableAmount * r.rate / (100.0 + r.rate)
+			} else {
+				rateTax = taxableAmount * r.rate / 100.0
+			}
 				groupTax += rateTax
 				taxByLabel[r.code] += rateTax
 			}
