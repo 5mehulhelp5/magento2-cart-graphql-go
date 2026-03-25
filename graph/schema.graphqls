@@ -19,6 +19,18 @@ type Mutation {
     """Add products to cart (simple products for Phase 1)."""
     addProductsToCart(cartId: String!, cartItems: [CartItemInput!]!): AddProductsToCartOutput
 
+    """Add simple products to cart (deprecated — use addProductsToCart)."""
+    addSimpleProductsToCart(input: AddSimpleProductsToCartInput): AddSimpleProductsToCartOutput
+
+    """Add virtual products to cart (deprecated — use addProductsToCart)."""
+    addVirtualProductsToCart(input: AddVirtualProductsToCartInput): AddVirtualProductsToCartOutput
+
+    """Add configurable products to cart (deprecated — use addProductsToCart)."""
+    addConfigurableProductsToCart(input: AddConfigurableProductsToCartInput): AddConfigurableProductsToCartOutput
+
+    """Add bundle products to cart (deprecated — use addProductsToCart)."""
+    addBundleProductsToCart(input: AddBundleProductsToCartInput): AddBundleProductsToCartOutput
+
     """Update cart item quantities."""
     updateCartItems(input: UpdateCartItemsInput): UpdateCartItemsOutput
 
@@ -70,6 +82,7 @@ type Mutation {
 type Cart {
     id: ID!
     items: [CartItemInterface]
+    itemsV2(pageSize: Int = 20, currentPage: Int = 1): CartItems
     total_quantity: Float!
     is_virtual: Boolean!
     email: String
@@ -95,6 +108,7 @@ type SimpleCartItem implements CartItemInterface {
     prices: CartItemPrices
     product: CartItemProduct!
     errors: [CartItemError]
+    customizable_options: [SelectedCustomizableOption!]!
 }
 
 type ConfigurableCartItem implements CartItemInterface {
@@ -105,6 +119,7 @@ type ConfigurableCartItem implements CartItemInterface {
     errors: [CartItemError]
     configurable_options: [SelectedConfigurableOption!]!
     configured_variant: CartItemProduct
+    customizable_options: [SelectedCustomizableOption!]!
 }
 
 type SelectedConfigurableOption {
@@ -121,6 +136,37 @@ type BundleCartItem implements CartItemInterface {
     product: CartItemProduct!
     errors: [CartItemError]
     bundle_options: [SelectedBundleOption!]!
+    customizable_options: [SelectedCustomizableOption!]!
+}
+
+type SelectedCustomizableOption {
+    customizable_option_uid: ID!
+    id: Int!
+    is_required: Boolean!
+    label: String!
+    sort_order: Int!
+    type: String!
+    values: [SelectedCustomizableOptionValue!]!
+}
+
+type SelectedCustomizableOptionValue {
+    customizable_option_value_uid: ID!
+    id: Int!
+    label: String!
+    price: CartItemSelectedOptionValuePrice!
+    value: String!
+}
+
+type CartItemSelectedOptionValuePrice {
+    type: PriceTypeEnum!
+    units: String!
+    value: Float!
+}
+
+enum PriceTypeEnum {
+    FIXED
+    PERCENT
+    DYNAMIC
 }
 
 type SelectedBundleOption {
@@ -160,6 +206,20 @@ enum CartItemErrorType {
     ITEM_INCREMENTS
 }
 
+# ─── Paginated cart items ─────────────────────────────────────────────────────
+
+type CartItems {
+    items: [CartItemInterface!]!
+    page_info: SearchResultPageInfo!
+    total_count: Int!
+}
+
+type SearchResultPageInfo {
+    current_page: Int
+    page_size: Int
+    total_pages: Int
+}
+
 # ─── Prices ──────────────────────────────────────────────────────────────────
 
 type CartPrices {
@@ -187,6 +247,13 @@ type CartTaxItem {
 type Discount {
     amount: Money!
     label: String!
+    applied_to: DiscountAppliedToType
+}
+
+enum DiscountAppliedToType {
+    ITEM
+    SHIPPING
+    WHOLE_CART
 }
 
 type Money {
@@ -245,7 +312,10 @@ type AvailableShippingMethod {
     method_code: String!
     method_title: String!
     amount: Money!
+    price_excl_tax: Money!
+    price_incl_tax: Money!
     available: Boolean!
+    error_message: String
 }
 
 type SelectedShippingMethod {
@@ -254,6 +324,8 @@ type SelectedShippingMethod {
     method_code: String!
     method_title: String!
     amount: Money!
+    price_excl_tax: Money!
+    price_incl_tax: Money!
 }
 
 # ─── Payment ─────────────────────────────────────────────────────────────────
@@ -486,6 +558,78 @@ type CheckoutUserInputError {
     code: CheckoutUserInputErrorCodes!
     message: String!
     path: [String!]!
+}
+
+# ─── Deprecated mutation types ───────────────────────────────────────────────
+
+input AddSimpleProductsToCartInput {
+    cart_id: String!
+    cart_items: [SimpleProductCartItemInput!]!
+}
+
+input SimpleProductCartItemInput {
+    data: CartItemInput!
+    customizable_options: [CustomizableOptionInput]
+}
+
+input CustomizableOptionInput {
+    id: Int
+    value_string: String!
+}
+
+input AddVirtualProductsToCartInput {
+    cart_id: String!
+    cart_items: [VirtualProductCartItemInput!]!
+}
+
+input VirtualProductCartItemInput {
+    data: CartItemInput!
+    customizable_options: [CustomizableOptionInput]
+}
+
+input AddConfigurableProductsToCartInput {
+    cart_id: String!
+    cart_items: [ConfigurableProductCartItemInput!]!
+}
+
+input ConfigurableProductCartItemInput {
+    data: CartItemInput!
+    parent_sku: String
+    variant_sku: String
+    customizable_options: [CustomizableOptionInput]
+}
+
+input AddBundleProductsToCartInput {
+    cart_id: String!
+    cart_items: [BundleProductCartItemInput!]!
+}
+
+input BundleProductCartItemInput {
+    data: CartItemInput!
+    bundle_options: [BundleOptionInput!]!
+    customizable_options: [CustomizableOptionInput]
+}
+
+input BundleOptionInput {
+    id: Int!
+    quantity: Float!
+    value: [String!]!
+}
+
+type AddSimpleProductsToCartOutput {
+    cart: Cart!
+}
+
+type AddVirtualProductsToCartOutput {
+    cart: Cart!
+}
+
+type AddConfigurableProductsToCartOutput {
+    cart: Cart!
+}
+
+type AddBundleProductsToCartOutput {
+    cart: Cart!
 }
 
 # ─── Enums ───────────────────────────────────────────────────────────────────

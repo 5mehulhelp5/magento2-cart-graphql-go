@@ -7,9 +7,52 @@ package graph
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 )
+
+// ItemsV2 is the resolver for the itemsV2 field.
+func (r *cartResolver) ItemsV2(ctx context.Context, obj *model.Cart, pageSize *int, currentPage *int) (*model.CartItems, error) {
+	ps := 20
+	if pageSize != nil && *pageSize > 0 {
+		ps = *pageSize
+	}
+	cp := 1
+	if currentPage != nil && *currentPage > 0 {
+		cp = *currentPage
+	}
+
+	all := obj.Items
+	total := len(all)
+	totalPages := (total + ps - 1) / ps
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	start := (cp - 1) * ps
+	end := start + ps
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	page := make([]model.CartItemInterface, end-start)
+	copy(page, all[start:end])
+
+	return &model.CartItems{
+		Items: page,
+		PageInfo: &model.SearchResultPageInfo{
+			CurrentPage: &cp,
+			PageSize:    &ps,
+			TotalPages:  &totalPages,
+		},
+		TotalCount: total,
+	}, nil
+}
 
 // CreateEmptyCart is the resolver for the createEmptyCart field.
 func (r *mutationResolver) CreateEmptyCart(ctx context.Context, input *model.CreateEmptyCartInput) (*string, error) {
@@ -36,6 +79,84 @@ func (r *mutationResolver) CreateGuestCart(ctx context.Context, input *model.Cre
 // AddProductsToCart is the resolver for the addProductsToCart field.
 func (r *mutationResolver) AddProductsToCart(ctx context.Context, cartID string, cartItems []*model.CartItemInput) (*model.AddProductsToCartOutput, error) {
 	return r.CartService.AddProducts(ctx, cartID, cartItems)
+}
+
+// AddSimpleProductsToCart is the resolver for the addSimpleProductsToCart field.
+func (r *mutationResolver) AddSimpleProductsToCart(ctx context.Context, input *model.AddSimpleProductsToCartInput) (*model.AddSimpleProductsToCartOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input required")
+	}
+	items := make([]*model.CartItemInput, len(input.CartItems))
+	for i, ci := range input.CartItems {
+		items[i] = ci.Data
+	}
+	out, err := r.CartService.AddProducts(ctx, input.CartID, items)
+	if err != nil {
+		return nil, err
+	}
+	return &model.AddSimpleProductsToCartOutput{Cart: out.Cart}, nil
+}
+
+// AddVirtualProductsToCart is the resolver for the addVirtualProductsToCart field.
+func (r *mutationResolver) AddVirtualProductsToCart(ctx context.Context, input *model.AddVirtualProductsToCartInput) (*model.AddVirtualProductsToCartOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input required")
+	}
+	items := make([]*model.CartItemInput, len(input.CartItems))
+	for i, ci := range input.CartItems {
+		items[i] = ci.Data
+	}
+	out, err := r.CartService.AddProducts(ctx, input.CartID, items)
+	if err != nil {
+		return nil, err
+	}
+	return &model.AddVirtualProductsToCartOutput{Cart: out.Cart}, nil
+}
+
+// AddConfigurableProductsToCart is the resolver for the addConfigurableProductsToCart field.
+func (r *mutationResolver) AddConfigurableProductsToCart(ctx context.Context, input *model.AddConfigurableProductsToCartInput) (*model.AddConfigurableProductsToCartOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input required")
+	}
+	items := make([]*model.CartItemInput, len(input.CartItems))
+	for i, ci := range input.CartItems {
+		item := *ci.Data
+		// parent_sku on the wrapper overrides the one in data
+		if ci.ParentSku != nil {
+			item.ParentSku = ci.ParentSku
+		}
+		items[i] = &item
+	}
+	out, err := r.CartService.AddProducts(ctx, input.CartID, items)
+	if err != nil {
+		return nil, err
+	}
+	return &model.AddConfigurableProductsToCartOutput{Cart: out.Cart}, nil
+}
+
+// AddBundleProductsToCart is the resolver for the addBundleProductsToCart field.
+func (r *mutationResolver) AddBundleProductsToCart(ctx context.Context, input *model.AddBundleProductsToCartInput) (*model.AddBundleProductsToCartOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input required")
+	}
+	items := make([]*model.CartItemInput, len(input.CartItems))
+	for i, ci := range input.CartItems {
+		item := *ci.Data
+		// Convert BundleOptionInput {id, quantity, value:[selectionID...]} to selected_options UIDs.
+		// UID format: base64("bundle/<optionID>/<selectionID>")
+		for _, bo := range ci.BundleOptions {
+			for _, selIDStr := range bo.Value {
+				uid := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("bundle/%d/%s", bo.ID, selIDStr)))
+				item.SelectedOptions = append(item.SelectedOptions, uid)
+			}
+		}
+		items[i] = &item
+	}
+	out, err := r.CartService.AddProducts(ctx, input.CartID, items)
+	if err != nil {
+		return nil, err
+	}
+	return &model.AddBundleProductsToCartOutput{Cart: out.Cart}, nil
 }
 
 // UpdateCartItems is the resolver for the updateCartItems field.
@@ -159,11 +280,15 @@ func (r *queryResolver) CustomerCart(ctx context.Context) (*model.Cart, error) {
 	return r.CartService.GetCustomerCart(ctx)
 }
 
+// Cart returns CartResolver implementation.
+func (r *Resolver) Cart() CartResolver { return &cartResolver{r} }
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+type cartResolver struct{ *Resolver }
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
