@@ -17,17 +17,18 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/cache"
 	appconfig "github.com/magendooro/magento2-cart-graphql-go/internal/config"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/database"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/jwt"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
+	commoncache "github.com/magendooro/magento2-go-common/cache"
+	commonconfig "github.com/magendooro/magento2-go-common/config"
+	commondb "github.com/magendooro/magento2-go-common/database"
+	commonjwt "github.com/magendooro/magento2-go-common/jwt"
+	"github.com/magendooro/magento2-go-common/middleware"
 )
 
 type App struct {
 	cfg   *appconfig.Config
 	db    *sql.DB
-	cache *cache.Client
+	cache *commoncache.Client
 }
 
 func New(cfg *appconfig.Config) (*App, error) {
@@ -40,17 +41,29 @@ func New(cfg *appconfig.Config) (*App, error) {
 	}
 	zerolog.SetGlobalLevel(level)
 
-	db, err := database.NewConnection(cfg.Database)
+	db, err := commondb.NewConnection(commondb.Config{
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		Name:            cfg.Database.Name,
+		Socket:          cfg.Database.Socket,
+		MaxOpenConns:    cfg.Database.MaxOpenConns,
+		MaxIdleConns:    cfg.Database.MaxIdleConns,
+		ConnMaxLifetime: cfg.Database.ConnMaxLifetime,
+		ConnMaxIdleTime: cfg.Database.ConnMaxIdleTime,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("database connection failed: %w", err)
 	}
 	log.Info().Str("database", cfg.Database.Name).Msg("connected to database")
 
-	redisCache := cache.New(cache.Config{
+	redisCache := commoncache.New(commoncache.Config{
 		Host:     cfg.Redis.Host,
 		Port:     cfg.Redis.Port,
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
+		Prefix:   "cust_gql:",
 	})
 
 	return &App{cfg: cfg, db: db, cache: redisCache}, nil
@@ -59,14 +72,14 @@ func New(cfg *appconfig.Config) (*App, error) {
 func (a *App) Run() error {
 	storeResolver := middleware.NewStoreResolver(a.db)
 
-	var jwtManager *jwt.Manager
+	var jwtManager *commonjwt.Manager
 	if a.cfg.Magento.CryptKey != "" {
-		jwtManager = jwt.NewManager(a.cfg.Magento.CryptKey, a.cfg.Magento.JWTTTLMinutes)
+		jwtManager = commonjwt.NewManager(a.cfg.Magento.CryptKey, a.cfg.Magento.JWTTTLMinutes)
 		log.Info().Msg("JWT authentication enabled")
 	}
 	tokenResolver := middleware.NewTokenResolver(a.db, jwtManager)
 
-	cp, err := appconfig.NewConfigProvider(a.db)
+	cp, err := commonconfig.NewConfigProvider(a.db)
 	if err != nil {
 		return fmt.Errorf("config provider failed: %w", err)
 	}
@@ -98,7 +111,10 @@ func (a *App) Run() error {
 	})
 
 	var h http.Handler = mux
-	h = middleware.CacheMiddleware(a.cache)(h)
+	h = middleware.CacheMiddleware(a.cache, middleware.CacheOptions{
+		SkipAuthenticated: true,
+		SkipMutations:     true,
+	})(h)
 	h = middleware.AuthMiddleware(tokenResolver)(h)
 	h = middleware.StoreMiddleware(storeResolver)(h)
 	h = middleware.LoggingMiddleware(h)

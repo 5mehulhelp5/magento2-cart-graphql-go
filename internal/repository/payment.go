@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	"github.com/magendooro/magento2-go-common/config"
 )
 
 // PaymentMethod holds an available payment method.

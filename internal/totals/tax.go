@@ -3,7 +3,7 @@ package totals
 import (
 	"context"
 
-	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	"github.com/magendooro/magento2-go-common/config"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 )
 

@@ -3,7 +3,7 @@ package shipping
 import (
 	"context"
 
-	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	"github.com/magendooro/magento2-go-common/config"
 )
 
 // FreeshippingCarrier implements free shipping above a configurable threshold.

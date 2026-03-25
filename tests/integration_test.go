@@ -14,9 +14,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph"
-	appconfig "github.com/magendooro/magento2-cart-graphql-go/internal/config"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/jwt"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
+	commonconfig "github.com/magendooro/magento2-go-common/config"
+	"github.com/magendooro/magento2-go-common/jwt"
+	"github.com/magendooro/magento2-go-common/middleware"
 )
 
 var testHandler http.Handler
@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 	cryptKey := envOrDefault("MAGENTO_CRYPT_KEY", "base64KjBr8ZM6bmK4xIWfk2/K0+xHEn+Ym6/Ogyl7Y7otzso=")
 	jwtManager := jwt.NewManager(cryptKey, 60)
 
-	cp, err := appconfig.NewConfigProvider(db)
+	cp, err := commonconfig.NewConfigProvider(db)
 	if err != nil {
 		panic("failed to create config provider: " + err.Error())
 	}

@@ -11,9 +11,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
+	"github.com/magendooro/magento2-go-common/config"
 	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
+	"github.com/magendooro/magento2-go-common/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/totals"

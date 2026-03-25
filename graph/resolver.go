@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/magendooro/magento2-cart-graphql-go/internal/config"
-	"github.com/magendooro/magento2-cart-graphql-go/internal/middleware"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/service"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
+	"github.com/magendooro/magento2-go-common/config"
+	"github.com/magendooro/magento2-go-common/middleware"
 )
 
 type Resolver struct {
@@ -31,7 +31,6 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 	orderRepo := repository.NewOrderRepository(db)
 	couponRepo := repository.NewCouponRepository(db)
 
-	// Build carrier registry (Strategy pattern — each carrier is independent)
 	shippingRegistry := shipping.NewRegistry(
 		&shipping.FlatrateCarrier{CP: cp},
 		&shipping.TablerateCarrier{DB: db, CP: cp},
