@@ -158,11 +158,17 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		return nil, carterr.ErrCartNotFound(maskedID)
 	}
 
+	cart, err := s.cartRepo.GetByID(ctx, quoteID)
+	if err != nil {
+		return nil, carterr.ErrCartNotFound(maskedID)
+	}
+	customerGroupID := cart.CustomerGroupID
+
 	storeID := middleware.GetStoreID(ctx)
 	var userErrors []*model.CartUserInputError
 
 	for _, input := range items {
-		product, err := s.lookupProduct(ctx, input.Sku, storeID)
+		product, err := s.lookupProduct(ctx, input.Sku, storeID, customerGroupID)
 		if err != nil {
 			userErrors = append(userErrors, &model.CartUserInputError{
 				Code:    model.CartUserInputErrorTypeProductNotFound,
@@ -188,11 +194,11 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		var addErr error
 		switch {
 		case product.ProductType == "configurable" && len(input.SelectedOptions) > 0:
-			addErr = s.addConfigurableProduct(ctx, quoteID, storeID, product, input)
+			addErr = s.addConfigurableProduct(ctx, quoteID, storeID, customerGroupID, product, input)
 		case product.ProductType == "grouped":
 			addErr = fmt.Errorf("Please specify the quantity of product(s).")
 		case product.ProductType == "bundle" && len(input.SelectedOptions) > 0:
-			addErr = s.addBundleProduct(ctx, quoteID, storeID, product, input)
+			addErr = s.addBundleProduct(ctx, quoteID, storeID, customerGroupID, product, input)
 		default:
 			_, addErr = s.itemRepo.Add(ctx, quoteID, product.ProductID, input.Sku, product.Name, product.ProductType, input.Quantity, product.Price)
 		}
@@ -208,8 +214,8 @@ func (s *CartService) AddProducts(ctx context.Context, maskedID string, items []
 		log.Error().Err(err).Int("quote_id", quoteID).Msg("totals recalculation failed")
 	}
 
-	cart, _ := s.GetCart(ctx, maskedID)
-	return &model.AddProductsToCartOutput{Cart: cart, UserErrors: userErrors}, nil
+	updatedCart, _ := s.GetCart(ctx, maskedID)
+	return &model.AddProductsToCartOutput{Cart: updatedCart, UserErrors: userErrors}, nil
 }
 
 func (s *CartService) UpdateItems(ctx context.Context, maskedID string, items []*model.CartItemUpdateInput) (*model.Cart, error) {
@@ -780,10 +786,11 @@ func (s *CartService) collectTotals(ctx context.Context, cart *repository.CartDa
 		}
 	}
 	cc := &totals.CollectorContext{
-		Quote:   cart,
-		Items:   items,
-		Address: shippingAddr,
-		StoreID: cart.StoreID,
+		Quote:              cart,
+		Items:              items,
+		Address:            shippingAddr,
+		StoreID:            cart.StoreID,
+		CustomerTaxClassID: s.taxRepo.GetCustomerTaxClassID(ctx, cart.CustomerGroupID),
 	}
 	return s.pipeline.Collect(ctx, cc)
 }
@@ -831,7 +838,7 @@ type productInfo struct {
 	StockStatus int
 }
 
-func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID int) (*productInfo, error) {
+func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID, customerGroupID int) (*productInfo, error) {
 	var p productInfo
 	err := s.cartRepo.DB().QueryRowContext(ctx, `
 		SELECT cpe.entity_id, cpe.type_id,
@@ -845,7 +852,7 @@ func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID int
 			AND cpev.attribute_id = (SELECT attribute_id FROM eav_attribute WHERE attribute_code = 'name' AND entity_type_id = 4)
 			AND cpev.store_id = 0
 		LEFT JOIN catalog_product_index_price cpip
-			ON cpe.entity_id = cpip.entity_id AND cpip.customer_group_id = 0
+			ON cpe.entity_id = cpip.entity_id AND cpip.customer_group_id = ?
 			AND cpip.website_id = (SELECT website_id FROM store WHERE store_id = ? LIMIT 1)
 		LEFT JOIN catalog_product_entity_int cpei_status
 			ON cpe.entity_id = cpei_status.entity_id
@@ -853,7 +860,7 @@ func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID int
 			AND cpei_status.store_id = 0
 		LEFT JOIN cataloginventory_stock_item csi ON cpe.entity_id = csi.product_id
 		WHERE cpe.sku = ?`,
-		storeID, sku,
+		customerGroupID, storeID, sku,
 	).Scan(&p.ProductID, &p.ProductType, &p.Name, &p.Price, &p.Status, &p.StockStatus)
 	if err != nil {
 		return nil, err
@@ -861,7 +868,7 @@ func (s *CartService) lookupProduct(ctx context.Context, sku string, storeID int
 	return &p, nil
 }
 
-func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, storeID int, parent *productInfo, input *model.CartItemInput) error {
+func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, storeID, customerGroupID int, parent *productInfo, input *model.CartItemInput) error {
 	db := s.cartRepo.DB()
 
 	superAttributes := make(map[int]int)
@@ -929,7 +936,7 @@ func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, store
 		return fmt.Errorf("The requested product is not available with the selected options.")
 	}
 
-	child, err := s.lookupProduct(ctx, matchedChild.sku, storeID)
+	child, err := s.lookupProduct(ctx, matchedChild.sku, storeID, customerGroupID)
 	if err != nil {
 		return fmt.Errorf("Could not find product \"%s\"", matchedChild.sku)
 	}
@@ -948,7 +955,7 @@ func (s *CartService) addConfigurableProduct(ctx context.Context, quoteID, store
 	return nil
 }
 
-func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID int, parent *productInfo, input *model.CartItemInput) error {
+func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID, customerGroupID int, parent *productInfo, input *model.CartItemInput) error {
 	db := s.cartRepo.DB()
 
 	type bundleSelection struct {
@@ -1003,7 +1010,7 @@ func (s *CartService) addBundleProduct(ctx context.Context, quoteID, storeID int
 			return fmt.Errorf("Invalid bundle selection %d", sel.selectionID)
 		}
 
-		childProduct, err := s.lookupProduct(ctx, sku, storeID)
+		childProduct, err := s.lookupProduct(ctx, sku, storeID, customerGroupID)
 		if err != nil {
 			return fmt.Errorf("Could not find product \"%s\"", sku)
 		}
