@@ -114,10 +114,9 @@ func (a *App) Run() error {
 	})
 
 	var h http.Handler = mux
-	h = middleware.CacheMiddleware(a.cache, middleware.CacheOptions{
-		SkipAuthenticated: true,
-		SkipMutations:     true,
-	})(h)
+	// Cart data changes on every mutation (add item, update qty, set address, etc.)
+	// and the cache middleware has no invalidation — skip caching entirely.
+	h = middleware.CacheMiddleware(nil, middleware.CacheOptions{})(h)
 	h = middleware.AuthMiddleware(tokenResolver)(h)
 	h = middleware.StoreMiddleware(storeResolver)(h)
 	h = ipMiddleware(h)
