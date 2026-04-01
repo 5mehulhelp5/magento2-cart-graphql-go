@@ -627,12 +627,49 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 		return nil, fmt.Errorf("Cart does not contain products.")
 	}
 
-	targetSkus := s.couponRepo.GetRuleActionSkus(ctx, rule.RuleID)
-	skuSet := make(map[string]bool, len(targetSkus))
-	for _, sk := range targetSkus {
-		skuSet[sk] = true
+	// Build cart eval context for conditions_serialized evaluation.
+	var cartCtx repository.CartEvalContext
+	for _, item := range items {
+		if item.ParentItemID != nil {
+			continue
+		}
+		cartCtx.Subtotal += item.RowTotal
+		cartCtx.TotalQty += item.Qty
+		cartCtx.TotalWeight += item.Weight * item.Qty
+		cartCtx.Items = append(cartCtx.Items, repository.ItemEvalContext{
+			SKU:         item.SKU,
+			ProductType: item.ProductType,
+			Price:       item.Price,
+			CategoryIDs: s.couponRepo.GetItemCategoryIDs(ctx, item.ProductID),
+		})
+	}
+	if addrs, addrErr := s.addressRepo.GetByQuoteID(ctx, quoteID); addrErr == nil {
+		for _, addr := range addrs {
+			if addr.AddressType == "shipping" {
+				cartCtx.CountryID = addr.CountryID
+				if addr.RegionID != nil {
+					cartCtx.RegionID = *addr.RegionID
+				}
+				if addr.Region != nil {
+					cartCtx.Region = *addr.Region
+				}
+				if addr.Postcode != nil {
+					cartCtx.Postcode = *addr.Postcode
+				}
+				if addr.ShippingMethod != nil {
+					cartCtx.ShippingMethod = *addr.ShippingMethod
+				}
+				break
+			}
+		}
 	}
 
+	condRoot := repository.ParseConditionTree(rule.ConditionsSerialized)
+	if !repository.EvaluateCartConditions(condRoot, cartCtx) {
+		return nil, fmt.Errorf("The coupon code isn't valid. Verify the code and try again.")
+	}
+
+	actRoot := repository.ParseConditionTree(rule.ActionsSerialized)
 	ruleIDStr := fmt.Sprintf("%d", rule.RuleID)
 	var totalDiscount float64
 	type itemUpdate struct {
@@ -646,7 +683,12 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 		if item.ParentItemID != nil {
 			continue
 		}
-		if len(skuSet) > 0 && !skuSet[item.SKU] {
+		if !repository.EvaluateItemMatchesActions(actRoot, repository.ItemEvalContext{
+			SKU:         item.SKU,
+			ProductType: item.ProductType,
+			Price:       item.Price,
+			CategoryIDs: s.couponRepo.GetItemCategoryIDs(ctx, item.ProductID),
+		}) {
 			continue
 		}
 
@@ -658,14 +700,22 @@ func (s *CartService) ApplyCoupon(ctx context.Context, maskedID, couponCode stri
 		case "by_fixed":
 			discountAmount = rule.DiscountAmount * item.Qty
 		case "cart_fixed":
-			var totalSubtotal float64
-			for _, it := range items {
-				if it.ParentItemID == nil {
-					totalSubtotal += it.RowTotal
-				}
+			if cartCtx.Subtotal > 0 {
+				discountAmount = rule.DiscountAmount * (item.RowTotal / cartCtx.Subtotal)
 			}
-			if totalSubtotal > 0 {
-				discountAmount = rule.DiscountAmount * (item.RowTotal / totalSubtotal)
+		case "to_percent":
+			discountAmount = item.RowTotal * (1 - rule.DiscountAmount/100.0)
+		case "to_fixed":
+			discountAmount = math.Max(0, item.RowTotal-rule.DiscountAmount*item.Qty)
+		case "buy_x_get_y":
+			step := float64(rule.DiscountStep)
+			free := rule.DiscountAmount
+			if step > 0 && free > 0 {
+				setSize := step + free
+				sets := math.Floor(item.Qty / setSize)
+				remainder := item.Qty - sets*setSize
+				freeQty := sets*free + math.Max(0, remainder-step)
+				discountAmount = item.Price * freeQty
 			}
 		}
 
