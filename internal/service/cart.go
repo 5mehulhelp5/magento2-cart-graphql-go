@@ -947,11 +947,28 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 
 	// Send order confirmation email (fire-and-forget)
 	if cart.CustomerEmail != nil && *cart.CustomerEmail != "" {
+		// Collect top-level items only (skip configurable children)
+		var topItems []*repository.CartItemData
+		for _, it := range items {
+			if it.ParentItemID == nil {
+				topItems = append(topItems, it)
+			}
+		}
+		// Fetch github_url per product
+		productIDs := make([]int, 0, len(topItems))
+		for _, it := range topItems {
+			productIDs = append(productIDs, it.ProductID)
+		}
+		githubURLs := s.fetchProductGithubURLs(ctx, productIDs)
+
+		isFree := orderTotals != nil && orderTotals.GrandTotal == 0
+		htmlBody, textBody := buildOrderConfirmationEmail(incrementID, topItems, githubURLs, isFree)
+
 		s.email.Send(emailclient.Request{
 			ToEmail:       *cart.CustomerEmail,
 			Subject:       "Your order #" + incrementID + " has been placed",
-			BodyHTML:      "<h1>Thank you for your order!</h1><p>Your order <strong>#" + incrementID + "</strong> has been received and is being processed.</p>",
-			BodyText:      "Thank you for your order! Your order #" + incrementID + " has been received and is being processed.",
+			BodyHTML:      htmlBody,
+			BodyText:      textBody,
 			TemplateID:    "order_confirmation",
 			TemplateVars:  map[string]any{"order_id": incrementID, "email": *cart.CustomerEmail},
 			SourceService: "cart",
@@ -1898,4 +1915,224 @@ func (s *CartService) ensureBillingAddress(ctx context.Context, quoteID int, add
 	billing := *shippingAddr
 	billing.AddressType = "billing"
 	return append(addrs, &billing)
+}
+
+// ── Order confirmation email helpers ─────────────────────────────────────────
+
+// fetchProductGithubURLs returns a map of productID → github_url for the given
+// product IDs. Missing values are omitted from the map.
+func (s *CartService) fetchProductGithubURLs(ctx context.Context, productIDs []int) map[int]string {
+	if len(productIDs) == 0 {
+		return nil
+	}
+	ph := strings.Repeat("?,", len(productIDs)-1) + "?"
+	args := make([]any, 0, len(productIDs)+1)
+	for _, id := range productIDs {
+		args = append(args, id)
+	}
+	// attribute_id resolved via subquery so it works across installations
+	query := fmt.Sprintf(`
+		SELECT cpev.entity_id, cpev.value
+		FROM catalog_product_entity_varchar cpev
+		WHERE cpev.attribute_id = (
+			SELECT attribute_id FROM eav_attribute
+			WHERE attribute_code = 'github_url' AND entity_type_id = 4
+		) AND cpev.entity_id IN (%s)
+		AND cpev.store_id = 0`, ph)
+
+	rows, err := s.cartRepo.DB().QueryContext(ctx, query, args...)
+	if err != nil {
+		log.Warn().Err(err).Msg("fetchProductGithubURLs query failed")
+		return nil
+	}
+	defer rows.Close()
+
+	result := make(map[int]string, len(productIDs))
+	for rows.Next() {
+		var id int
+		var url string
+		if err := rows.Scan(&id, &url); err == nil && url != "" {
+			result[id] = url
+		}
+	}
+	return result
+}
+
+// orderItem is a simplified view of a cart item for email rendering.
+type orderItem struct {
+	Name      string
+	SKU       string
+	Qty       float64
+	Price     float64
+	GithubURL string // empty if not set
+}
+
+// buildOrderConfirmationEmail returns (htmlBody, textBody) for the order confirmation.
+// isFree=true → free (grand_total=0): show GitHub install links.
+// isFree=false → paid: show bank wire details.
+func buildOrderConfirmationEmail(
+	incrementID string,
+	items []*repository.CartItemData,
+	githubURLs map[int]string,
+	isFree bool,
+) (string, string) {
+	// Build item list
+	var oItems []orderItem
+	for _, it := range items {
+		oi := orderItem{
+			Name:  it.Name,
+			SKU:   it.SKU,
+			Qty:   it.Qty,
+			Price: it.Price,
+		}
+		if githubURLs != nil {
+			oi.GithubURL = githubURLs[it.ProductID]
+		}
+		oItems = append(oItems, oi)
+	}
+
+	if isFree {
+		return buildFreeOrderEmail(incrementID, oItems), buildFreeOrderEmailText(incrementID, oItems)
+	}
+	return buildPaidOrderEmail(incrementID, oItems), buildPaidOrderEmailText(incrementID, oItems)
+}
+
+func buildFreeOrderEmail(incrementID string, items []orderItem) string {
+	var b strings.Builder
+	b.WriteString(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<style>
+body{font-family:Arial,sans-serif;color:#222;max-width:600px;margin:0 auto;padding:20px}
+h1{color:#1a1a2e;font-size:22px}
+h2{color:#333;font-size:16px;margin-top:24px}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th{background:#f5f5f5;text-align:left;padding:8px 12px;font-size:13px;border-bottom:2px solid #ddd}
+td{padding:8px 12px;font-size:13px;border-bottom:1px solid #eee;vertical-align:top}
+.install-btn{display:inline-block;background:#24292e;color:#fff!important;text-decoration:none;padding:7px 16px;border-radius:5px;font-size:13px;margin-top:4px}
+.footer{margin-top:32px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:16px}
+</style></head><body>
+<h1>Thank you for your order!</h1>
+<p>Your order <strong>#` + incrementID + `</strong> has been received.<br>
+Below you'll find download links for each item — your extensions are ready to install right now.</p>
+<h2>Your items</h2>
+<table>
+<tr><th>Product</th><th>SKU</th><th>Qty</th><th>Install</th></tr>
+`)
+	for _, it := range items {
+		installCell := `<span style="color:#999">—</span>`
+		if it.GithubURL != "" {
+			installCell = `<a class="install-btn" href="` + it.GithubURL + `">Download &amp; Install</a>`
+		}
+		b.WriteString(`<tr><td>` + it.Name + `</td><td style="font-family:monospace">` + it.SKU + `</td>`)
+		b.WriteString(`<td style="text-align:center">` + fmt.Sprintf("%.0f", it.Qty) + `</td>`)
+		b.WriteString(`<td>` + installCell + `</td></tr>`)
+	}
+	b.WriteString(`</table>
+<p>If you have any questions, reply to this email or visit <a href="https://magendoo.ro">magendoo.ro</a>.</p>
+<div class="footer">Magendoo Interactive SRL · Str. W A Mozart Nr. 21, Sector 2, București · <a href="https://magendoo.ro">magendoo.ro</a></div>
+</body></html>`)
+	return b.String()
+}
+
+func buildFreeOrderEmailText(incrementID string, items []orderItem) string {
+	var b strings.Builder
+	b.WriteString("Thank you for your order!\n\n")
+	b.WriteString("Order #" + incrementID + " — your extensions are ready to install.\n\n")
+	b.WriteString("ITEMS\n")
+	for _, it := range items {
+		b.WriteString(fmt.Sprintf("- %s (SKU: %s, Qty: %.0f)\n", it.Name, it.SKU, it.Qty))
+		if it.GithubURL != "" {
+			b.WriteString("  Install: " + it.GithubURL + "\n")
+		}
+	}
+	b.WriteString("\nIf you have questions, visit https://magendoo.ro\n")
+	return b.String()
+}
+
+func buildPaidOrderEmail(incrementID string, items []orderItem) string {
+	var b strings.Builder
+	// Calculate subtotal for display
+	var subtotal float64
+	for _, it := range items {
+		subtotal += it.Price * it.Qty
+	}
+
+	b.WriteString(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<style>
+body{font-family:Arial,sans-serif;color:#222;max-width:600px;margin:0 auto;padding:20px}
+h1{color:#1a1a2e;font-size:22px}
+h2{color:#333;font-size:16px;margin-top:24px}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+th{background:#f5f5f5;text-align:left;padding:8px 12px;font-size:13px;border-bottom:2px solid #ddd}
+td{padding:8px 12px;font-size:13px;border-bottom:1px solid #eee}
+.bank-box{background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:16px 20px;margin:16px 0;font-size:13px;line-height:1.7}
+.bank-box strong{color:#1a1a2e}
+.total-row td{font-weight:bold;border-top:2px solid #ddd}
+.notice{background:#fffbea;border-left:4px solid #f59e0b;padding:12px 16px;margin:16px 0;font-size:13px}
+.footer{margin-top:32px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:16px}
+</style></head><body>
+<h1>Thank you for your order!</h1>
+<p>Your order <strong>#` + incrementID + `</strong> has been received and is awaiting payment.<br>
+Once your payment is confirmed, we'll send you full installation instructions by email.</p>
+<h2>Your items</h2>
+<table>
+<tr><th>Product</th><th>SKU</th><th>Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Total</th></tr>
+`)
+	for _, it := range items {
+		rowTotal := it.Price * it.Qty
+		b.WriteString(fmt.Sprintf(`<tr><td>%s</td><td style="font-family:monospace">%s</td>`,
+			it.Name, it.SKU))
+		b.WriteString(fmt.Sprintf(`<td style="text-align:center">%.0f</td>`, it.Qty))
+		b.WriteString(fmt.Sprintf(`<td style="text-align:right">$%.2f</td>`, it.Price))
+		b.WriteString(fmt.Sprintf(`<td style="text-align:right">$%.2f</td></tr>`, rowTotal))
+	}
+	b.WriteString(fmt.Sprintf(`<tr class="total-row"><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">$%.2f</td></tr>`, subtotal))
+	b.WriteString(`</table>
+<div class="notice">
+  <strong>Next step:</strong> Please transfer the amount above using the bank details below.
+  Reference your order number <strong>#` + incrementID + `</strong> in the payment description.
+  We will send installation instructions once payment is confirmed.
+</div>
+<h2>Bank transfer details</h2>
+<div class="bank-box">
+  <strong>Beneficiary:</strong> SC Magendoo Interactive SRL<br>
+  <strong>Address:</strong> Str. W A Mozart Nr. 21, Sector 2, București<br>
+  <strong>VAT No:</strong> RO28155293<br>
+  <strong>Reg. Com.:</strong> J40/2768/2011<br>
+  <br>
+  <strong>IBAN:</strong> RO04BTRLGBPCRT00C4368801<br>
+  <strong>Bank:</strong> Banca Transilvania, Sucursala București Militari<br>
+  <strong>SWIFT:</strong> BTRLRO22XXX<br>
+  <br>
+  <strong>Payment reference:</strong> Order #` + incrementID + `
+</div>
+<p>If you have any questions, reply to this email or visit <a href="https://magendoo.ro">magendoo.ro</a>.</p>
+<div class="footer">Magendoo Interactive SRL · Str. W A Mozart Nr. 21, Sector 2, București · VAT RO28155293</div>
+</body></html>`)
+	return b.String()
+}
+
+func buildPaidOrderEmailText(incrementID string, items []orderItem) string {
+	var b strings.Builder
+	b.WriteString("Thank you for your order!\n\n")
+	b.WriteString("Order #" + incrementID + " is awaiting payment.\n")
+	b.WriteString("Once payment is confirmed, we'll email you installation instructions.\n\n")
+	b.WriteString("ITEMS\n")
+	var subtotal float64
+	for _, it := range items {
+		rowTotal := it.Price * it.Qty
+		subtotal += rowTotal
+		b.WriteString(fmt.Sprintf("- %s (SKU: %s, Qty: %.0f, Price: $%.2f)\n",
+			it.Name, it.SKU, it.Qty, it.Price))
+	}
+	b.WriteString(fmt.Sprintf("\nSubtotal: $%.2f\n", subtotal))
+	b.WriteString("\nBANK TRANSFER DETAILS\n")
+	b.WriteString("Beneficiary: SC Magendoo Interactive SRL\n")
+	b.WriteString("Address: Str. W A Mozart Nr. 21, Sector 2, Bucuresti\n")
+	b.WriteString("VAT No: RO28155293 | Reg. Com.: J40/2768/2011\n")
+	b.WriteString("IBAN: RO04BTRLGBPCRT00C4368801\n")
+	b.WriteString("Bank: Banca Transilvania, Sucursala Bucuresti Militari\n")
+	b.WriteString("SWIFT: BTRLRO22XXX\n")
+	b.WriteString("\nPayment reference: Order #" + incrementID + "\n")
+	b.WriteString("\nIf you have questions, visit https://magendoo.ro\n")
+	return b.String()
 }
