@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 		panic("failed to create config provider: " + err.Error())
 	}
 
-	resolver, err := graph.NewResolver(db, cp)
+	resolver, err := graph.NewResolver(db, cp, nil)
 	if err != nil {
 		panic("failed to create resolver: " + err.Error())
 	}
@@ -1954,4 +1954,33 @@ func TestItemsV2(t *testing.T) {
 		t.Errorf("expected qty=3 got %.0f", iv.Items[0].Quantity)
 	}
 	t.Logf("PASS: itemsV2 — total_count=%d pages=%d items=%d", iv.TotalCount, iv.PageInfo.TotalPages, len(iv.Items))
+}
+
+func TestCheckoutAgreements_DisabledByDefault(t *testing.T) {
+	// Magento default: checkout/options/enable_agreements = 0 (disabled).
+	// checkoutAgreements must return an empty array, not null or an error.
+	resp := doQuery(t, `{ checkoutAgreements { agreement_id name checkbox_text is_html mode } }`, "")
+	if len(resp.Errors) > 0 {
+		t.Fatalf("unexpected errors: %v", resp.Errors)
+	}
+
+	var data struct {
+		CheckoutAgreements []struct {
+			AgreementID  int    `json:"agreement_id"`
+			Name         string `json:"name"`
+			CheckboxText string `json:"checkbox_text"`
+			IsHTML       bool   `json:"is_html"`
+			Mode         string `json:"mode"`
+		} `json:"checkoutAgreements"`
+	}
+	if err := json.Unmarshal(resp.Data, &data); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if data.CheckoutAgreements == nil {
+		t.Fatal("expected empty array, got null")
+	}
+	if len(data.CheckoutAgreements) != 0 {
+		t.Errorf("expected 0 agreements (T&C disabled by default), got %d", len(data.CheckoutAgreements))
+	}
+	t.Logf("PASS: checkoutAgreements — returns [] when T&C config is disabled")
 }

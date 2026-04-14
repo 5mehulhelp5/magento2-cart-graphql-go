@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/magendooro/magento2-cart-graphql-go/internal/payment"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/repository"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/service"
 	"github.com/magendooro/magento2-cart-graphql-go/internal/shipping"
@@ -12,11 +13,14 @@ import (
 )
 
 type Resolver struct {
-	CartService   *service.CartService
-	TokenResolver *middleware.TokenResolver
+	CartService       *service.CartService
+	AgreementRepo     *repository.CheckoutAgreementRepository
+	ConfigProvider    *config.ConfigProvider
+	TokenResolver     *middleware.TokenResolver
+	StripeClient      *payment.StripeClient
 }
 
-func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
+func NewResolver(db *sql.DB, cp *config.ConfigProvider, stripeClient *payment.StripeClient) (*Resolver, error) {
 	if cp == nil {
 		return nil, fmt.Errorf("ConfigProvider is required")
 	}
@@ -38,8 +42,12 @@ func NewResolver(db *sql.DB, cp *config.ConfigProvider) (*Resolver, error) {
 	)
 
 	cartService := service.NewCartService(cartRepo, maskRepo, itemRepo, addressRepo, shippingRepo, shippingRegistry, paymentRepo, taxRepo, orderRepo, couponRepo, cp)
+	agreementRepo := repository.NewCheckoutAgreementRepository(db)
 
 	return &Resolver{
-		CartService: cartService,
+		CartService:    cartService,
+		AgreementRepo:  agreementRepo,
+		ConfigProvider: cp,
+		StripeClient:   stripeClient,
 	}, nil
 }

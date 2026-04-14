@@ -7,6 +7,28 @@ type Query {
 
     """Fetch the authenticated customer's active cart."""
     customerCart: Cart!
+
+    """Return Terms and Conditions configuration for checkout. Returns empty list if T&C is disabled."""
+    checkoutAgreements: [CheckoutAgreement]
+}
+
+"""A single Terms and Conditions agreement that must be accepted before checkout."""
+type CheckoutAgreement {
+    agreement_id: Int!
+    name: String!
+    content: String!
+    content_height: String
+    checkbox_text: String!
+    is_html: Boolean!
+    mode: CheckoutAgreementMode!
+}
+
+"""How the checkout agreement acceptance is handled."""
+enum CheckoutAgreementMode {
+    """Acceptance is recorded automatically."""
+    AUTO
+    """The customer must manually check a checkbox."""
+    MANUAL
 }
 
 type Mutation {
@@ -54,6 +76,9 @@ type Mutation {
 
     """Convert the cart into an order."""
     placeOrder(input: PlaceOrderInput): PlaceOrderOutput
+
+    """Create a Stripe Checkout Session and return the redirect URL."""
+    createStripeCheckoutSession(input: CreateStripeCheckoutSessionInput!): CreateStripeCheckoutSessionOutput
 
     """Apply a coupon to the cart."""
     applyCouponToCart(input: ApplyCouponToCartInput): ApplyCouponToCartOutput
@@ -533,6 +558,17 @@ type PlacedOrder {
     token: String!
 }
 
+input CreateStripeCheckoutSessionInput {
+    cart_id: String!
+    success_url: String!
+    cancel_url: String!
+}
+
+type CreateStripeCheckoutSessionOutput {
+    checkout_url: String!
+    session_id: String!
+}
+
 type ApplyCouponToCartOutput {
     cart: Cart!
 }
@@ -639,6 +675,7 @@ enum PlaceOrderErrorCodes {
     CART_NOT_ACTIVE
     GUEST_EMAIL_MISSING
     UNABLE_TO_PLACE_ORDER
+    INSUFFICIENT_STOCK
     UNDEFINED
 }
 
