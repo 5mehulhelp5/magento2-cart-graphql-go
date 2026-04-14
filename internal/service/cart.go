@@ -14,6 +14,7 @@ import (
 
 	"github.com/magendooro/magento2-cart-graphql-go/graph/model"
 	"github.com/magendooro/magento2-go-common/config"
+	"github.com/magendooro/magento2-go-common/emailclient"
 	carterr "github.com/magendooro/magento2-cart-graphql-go/internal/errors"
 	"github.com/magendooro/magento2-go-common/mgerrors"
 	cartmapper "github.com/magendooro/magento2-cart-graphql-go/internal/mapper"
@@ -41,6 +42,7 @@ type CartService struct {
 	cp               *config.ConfigProvider
 	mapper           *cartmapper.CartMapper
 	stripeClient     *payment.StripeClient
+	email            *emailclient.Client
 }
 
 func NewCartService(
@@ -79,6 +81,7 @@ func NewCartService(
 		pipeline:         pipeline,
 		cp:               cp,
 		mapper:           cartmapper.NewCartMapper(cartRepo.DB(), addressRepo),
+		email:            emailclient.NewFromEnv(),
 	}
 }
 
@@ -941,6 +944,20 @@ func (s *CartService) PlaceOrder(ctx context.Context, maskedID string) (*model.P
 	}
 
 	log.Info().Str("increment_id", incrementID).Int("quote_id", quoteID).Msg("order placed")
+
+	// Send order confirmation email (fire-and-forget)
+	if cart.CustomerEmail != nil && *cart.CustomerEmail != "" {
+		s.email.Send(emailclient.Request{
+			ToEmail:       *cart.CustomerEmail,
+			Subject:       "Your order #" + incrementID + " has been placed",
+			BodyHTML:      "<h1>Thank you for your order!</h1><p>Your order <strong>#" + incrementID + "</strong> has been received and is being processed.</p>",
+			BodyText:      "Thank you for your order! Your order #" + incrementID + " has been received and is being processed.",
+			TemplateID:    "order_confirmation",
+			TemplateVars:  map[string]any{"order_id": incrementID, "email": *cart.CustomerEmail},
+			SourceService: "cart",
+		})
+	}
+
 	return &model.PlaceOrderOutput{
 		Errors:  []*model.PlaceOrderError{},
 		OrderV2: &model.PlacedOrder{Number: incrementID, Token: protectCode},
